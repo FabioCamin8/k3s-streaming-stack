@@ -1,0 +1,17 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["kubernetes"],
+  "includePaths": ["k8s/**"],
+  "dependencyDashboard": true,
+  "prCreation": "immediate",
+  "automerge": false,
+  "packageRules": [
+    {
+      "description": "Keep Kubernetes image updates reviewable",
+      "matchManagers": ["kubernetes"],
+      "automerge": false,
+      "labels": ["dependencies", "kubernetes"]
+    }
+  ]
+}
