@@ -166,6 +166,7 @@ run_cmd qm create "$TEMPLATE_VMID" \
     --cores 2 \
     --memory 2048 \
     --balloon 0 \
+    --ciupgrade 0 \
     --scsihw virtio-scsi-single \
     --agent enabled=1 \
     --serial0 socket \

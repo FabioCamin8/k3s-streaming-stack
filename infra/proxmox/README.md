@@ -80,8 +80,10 @@ If it fails, inspect `cloud-init status --long`,
 `/var/log/cloud-init.log`, and `/var/log/cloud-init-output.log` before making
 another attempt.
 
-`package_upgrade: false` is intentional. OS patching is an explicit gate
-between Cloud-Init and K3s, so the operational sequence is:
+`package_upgrade: false` is intentional. The builder also sets Proxmox
+`ciupgrade=0`; otherwise Proxmox's generated user-data defaults to
+`package_upgrade: true` and defeats the vendor-data policy. OS patching is an
+explicit gate between Cloud-Init and K3s, so the operational sequence is:
 
 ```text
 cloud-init status --wait
