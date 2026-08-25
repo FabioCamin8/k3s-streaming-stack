@@ -2,9 +2,34 @@
 
 ## Platform boundary
 
-The deployment target is one Debian 13 VM on Proxmox VE. The VM is the Kubernetes node and owns the guest kernel, cgroups, network namespace, and storage boundary. K3s runs as the node distribution and supplies its bundled containerd, CoreDNS, Traefik v3, ServiceLB, and local-path provisioner.
+The deployment target is one Debian 13 VM on Proxmox VE. The current milestone creates that VM from a verified Cloud-Init template and stops at the Debian baseline. The VM will be the Kubernetes node in the later milestone and will own the guest kernel, cgroups, network namespace, and storage boundary. K3s will then run as the node distribution and supply its bundled containerd, CoreDNS, Traefik v3, ServiceLB, and local-path provisioner.
 
 There is no Docker or Podman dependency. There is no second ingress controller. There is no claim of high availability: loss of the VM takes the cluster and its local data offline.
+
+## Proxmox and Debian bootstrap
+
+The reproducible infrastructure path is:
+
+```text
+official Debian 13 genericcloud image
+    -> debian13-cloud reusable template
+    -> full clone
+    -> k3s01 project VM profile
+    -> Cloud-Init
+    -> Debian baseline verification
+```
+
+The template is generic Debian only. It does not contain K3s, Docker, Podman,
+Kubernetes packages, AIOStreams, Remux, cert-manager, or application
+configuration. Proxmox-generated Cloud-Init supplies the per-instance
+hostname, user, SSH key, DHCP networking, and DNS. Project vendor-data supplies
+the small OS package baseline, SSH hardening, QEMU guest-agent setup, and
+generic OS initialization.
+
+The network underlay is MTU 9000 end to end: physical network, Proxmox
+physical NIC, `vmbr`, VirtIO NIC, and Debian guest. The VM NIC declares MTU
+9000 explicitly. The K3s CNI/Flannel overlay MTU is not guessed or configured
+in this phase; it will be discovered and validated after K3s installation.
 
 ## Request and data paths
 

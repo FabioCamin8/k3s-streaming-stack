@@ -30,7 +30,9 @@ Explicitly out of scope for v0.1:
 
 ## 3. Architecture
 
-The target is a Debian 13 VM, not an LXC container. K3s owns the Kubernetes node and uses its bundled containerd. Bundled Traefik is the only ingress controller. AIOStreams and Remux are separate one-replica workloads with local persistent data; their manifests are intentionally deferred until upstream image and configuration contracts are validated.
+The target is a Debian 13 VM, not an LXC container. The current bootstrap milestone builds that VM from a verified Debian Cloud-Init template; it does not install K3s yet. When the later Kubernetes milestone begins, K3s will own the node and use its bundled containerd. Bundled Traefik will be the only ingress controller. AIOStreams and Remux are separate one-replica workloads with local persistent data; their manifests are intentionally deferred until upstream image and configuration contracts are validated.
+
+The Proxmox underlay uses MTU 9000 through the physical network, bridge, VirtIO NIC, and Debian guest. The VM provisioning path declares the NIC MTU explicitly. The future K3s CNI/Flannel overlay MTU is intentionally not pinned here; it will be measured and validated after K3s bootstrap.
 
 ```mermaid
 flowchart TD
@@ -96,16 +98,17 @@ Renovate is configured for Kubernetes references beneath `k8s/`, with automerge 
 
 ## 10. Roadmap
 
-1. Complete and review this architecture and safety baseline.
-2. Verify current AIOStreams and Remux image names, tags, ports, health behavior, persistence paths, and configuration requirements from their primary repositories.
-3. Add minimal Kubernetes-native manifests and example-safe configuration for the workloads.
-4. Add cert-manager and Traefik configuration using the supported K3s HelmChartConfig path.
-5. Validate Let's Encrypt staging, ingress, authentication, persistence, redirect behavior, and rollback before production certificates.
-6. Run the single-node stack, document observed operational commands, and promote only proven configuration.
+1. Build the pinned Debian 13 template, clone `k3s01`, and verify the Debian baseline.
+2. Select and pin a supported K3s release, then install the single server only after the Debian baseline passes.
+3. Measure and validate the K3s CNI/Flannel MTU against the 9000-byte VM underlay; do not copy the underlay value blindly.
+4. Verify current AIOStreams and Remux image names, tags, ports, health behavior, persistence paths, and configuration requirements from their primary repositories.
+5. Add minimal Kubernetes-native manifests and example-safe configuration for the workloads.
+6. Add cert-manager and Traefik configuration using the supported K3s HelmChartConfig path, then validate staging certificates, ingress, persistence, redirect behavior, and rollback.
+7. Run the single-node stack, document observed operational commands, and promote only proven configuration.
 
 ## 11. Current project status
 
-The repository is in the architecture/bootstrap phase. Documentation, ADRs, secret-safety defaults, and the Renovate policy are the initial deliverables. No K3s installation has been performed by this project, and no AIOStreams, Remux, cert-manager, or Traefik workload manifests are claimed as production-ready yet.
+The repository is in the Proxmox/Debian bootstrap phase. It contains the reproducible template and full-clone automation plus guest baseline verification, but no K3s installation has been performed by this project. No AIOStreams, Remux, cert-manager, or Traefik workload manifests are claimed as production-ready yet.
 
 ## 12. Upstream and reference projects
 
@@ -126,6 +129,8 @@ Licenses were checked before this bootstrap. No substantial upstream code or con
 ```text
 docs/                 Architecture and operations documentation
 docs/decisions/       Short architecture decision records
+infra/proxmox/        Debian Cloud-Init template and VM clone automation
+scripts/verify/       Guest baseline verification scripts
 k8s/                  Kubernetes-native configuration as contracts are verified
 examples/             Redacted, non-secret examples only
 renovate.json         Conservative image update policy

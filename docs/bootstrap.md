@@ -1,20 +1,42 @@
 # Bootstrap sequence
 
-This is the intended sequence for a fresh deployment. It is documentation only; repository bootstrap work does not install K3s or modify any machine.
+This is the intended sequence for a fresh deployment. The current repository
+milestone creates no Proxmox resources automatically during review; the
+commands below are the operator-run next step. K3s and applications remain
+separate later milestones.
 
 ## Prerequisites
 
-- A Proxmox VE VM matching [`proxmox-vm.md`](proxmox-vm.md).
+- A Proxmox VE host with one image-capable storage and one snippets-capable storage.
+- A local copy of the repository on that Proxmox host.
+- An operator SSH public-key file supplied out of band.
 - A DHCP reservation and working guest DNS.
-- A Cloudflare-managed zone and a hostname plan using placeholders until deployment, for example `aiostreams.stream.example.com` and `remux.stream.example.com`.
-- A private operator workstation with `kubectl`, `helm` if needed by the selected installation path, and Git.
-- A backup destination for application data and a tested recovery procedure.
+- A private operator workstation with Git and, later, `kubectl`/`helm` if needed by the selected installation path.
+
+## Current milestone: Debian template and VM
+
+1. Inspect storage and bridge choices with `pvesm status --content images`,
+   `pvesm status --content snippets`, and `ip link show vmbr0`. Do not assume a
+   storage name.
+2. Run the template builder from [`infra/proxmox/README.md`](../infra/proxmox/README.md)
+   with explicit image and snippet storage IDs. The builder verifies the
+   dated Debian image checksum, configures the generic `debian13-cloud`
+   template, and refuses collisions.
+3. Run the clone builder with an explicit `SSH_PUBLIC_KEY_FILE`. It creates a
+   full `k3s01` clone, applies `ip=dhcp`, declares the VM NIC MTU as 9000, and
+   starts the VM unless `--no-start` is selected.
+4. From the guest, run `cloud-init status --wait` before considering it ready.
+5. Copy and run `scripts/verify/debian-node.sh`. Investigate any failure using
+   `cloud-init status --long`, `/var/log/cloud-init.log`, and
+   `/var/log/cloud-init-output.log`.
+6. Stop here. Do not install K3s until the Debian baseline is passing and the
+   template/clone result has been reviewed.
 
 ## Sequence
 
-1. Build the VM and complete the guest checks in `proxmox-vm.md`.
-2. Select a supported K3s release, record the exact version in private deployment notes, and install the single server using the [official K3s quick-start documentation](https://docs.k3s.io/quick-start). Do not disable the bundled Traefik installation.
-3. Confirm the node, CoreDNS, Traefik, ServiceLB, and local-path components are healthy before adding workloads. Record the K3s version and rendered component versions.
+1. After the Debian baseline passes, select a supported K3s release, record the exact version in private deployment notes, and install the single server using the [official K3s quick-start documentation](https://docs.k3s.io/quick-start). Do not disable the bundled Traefik installation.
+2. Measure and validate the resulting CNI/Flannel overlay MTU; do not copy the 9000-byte underlay value blindly.
+3. Confirm the node, CoreDNS, Traefik, ServiceLB, and local-path components are healthy before adding workloads. Record the K3s version, overlay MTU, and rendered component versions.
 4. Install cert-manager using its [official installation documentation](https://cert-manager.io/docs/installation/), selecting and recording an exact release. Do not create a production issuer before staging validation is complete.
 5. Create the Cloudflare API token out of band with the permissions and zone scope in [`cloudflare.md`](cloudflare.md). Deliver it to the cluster through an operator-controlled secret workflow; never place it in this repository.
 6. Apply only the verified infrastructure configuration. K3s's supported [HelmChartConfig mechanism](https://docs.k3s.io/helm) is the intended seam for bundled Traefik configuration.
