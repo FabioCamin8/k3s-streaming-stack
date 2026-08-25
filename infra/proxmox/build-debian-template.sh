@@ -176,6 +176,7 @@ run_cmd qm set "$TEMPLATE_VMID" \
     --efidisk0 "${STORAGE}:0,efitype=4m"
 
 if (( DRY_RUN )); then
+    run_cmd qm disk import "$TEMPLATE_VMID" "$IMAGE_FILE" "$STORAGE"
     imported_volume="${STORAGE}:vm-${TEMPLATE_VMID}-disk-1"
     log "dry-run: using illustrative imported disk volume $imported_volume"
 else
