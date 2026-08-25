@@ -180,12 +180,12 @@ if (( DRY_RUN )); then
     log "dry-run: using illustrative imported disk volume $imported_volume"
 else
     log "importing Debian cloud disk into $STORAGE"
-    qm disk import "$TEMPLATE_VMID" "$IMAGE_FILE" "$STORAGE" --format qcow2 >"$WORK_DIR/importdisk.log" 2>&1 || {
+    qm disk import "$TEMPLATE_VMID" "$IMAGE_FILE" "$STORAGE" >"$WORK_DIR/importdisk.log" 2>&1 || {
         sed -n '1,120p' "$WORK_DIR/importdisk.log" >&2
         die "qm disk import failed; inspect VMID $TEMPLATE_VMID before retrying"
     }
     imported_volume=$(qm config "$TEMPLATE_VMID" | awk '$1 ~ /^unused[0-9]+:/ { print $2; exit }')
-    [[ -n $imported_volume ]] || die "qm importdisk completed but no unused disk was found in VM config"
+    [[ -n $imported_volume ]] || die "qm disk import completed but no unused disk was found in VM config"
 fi
 
 run_cmd qm set "$TEMPLATE_VMID" \
