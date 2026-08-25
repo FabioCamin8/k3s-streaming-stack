@@ -80,6 +80,22 @@ If it fails, inspect `cloud-init status --long`,
 `/var/log/cloud-init.log`, and `/var/log/cloud-init-output.log` before making
 another attempt.
 
+`package_upgrade: false` is intentional. OS patching is an explicit gate
+between Cloud-Init and K3s, so the operational sequence is:
+
+```text
+cloud-init status --wait
+    -> Debian baseline verification
+    -> apt-get update
+    -> apt-get full-upgrade
+    -> reboot if required
+    -> repeat verification
+    -> later K3s installation
+```
+
+Do not install K3s until the post-upgrade verification passes. The template
+builder does not perform this patching step.
+
 ## Network contract
 
 The physical underlay, Proxmox bridge, VirtIO NIC, and Debian guest are

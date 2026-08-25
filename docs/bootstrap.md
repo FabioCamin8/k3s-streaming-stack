@@ -29,8 +29,12 @@ separate later milestones.
 5. Copy and run `scripts/verify/debian-node.sh`. Investigate any failure using
    `cloud-init status --long`, `/var/log/cloud-init.log`, and
    `/var/log/cloud-init-output.log`.
-6. Stop here. Do not install K3s until the Debian baseline is passing and the
-   template/clone result has been reviewed.
+6. Perform the explicit OS patching gate before K3s. Keep
+   `package_upgrade: false` in vendor-data, then run `apt-get update`,
+   `apt-get full-upgrade`, reboot if `/var/run/reboot-required` exists, and
+   rerun the Debian verifier.
+7. Stop here. Do not install K3s until the post-upgrade Debian verification is
+   passing and the template/clone result has been reviewed.
 
 ## Sequence
 
