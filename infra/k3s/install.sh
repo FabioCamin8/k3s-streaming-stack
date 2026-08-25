@@ -115,6 +115,7 @@ printf '%s  %s\n' "$K3S_BINARY_SHA256" "$binary_path" | sha256sum --check --stat
 printf '%s  %s\n' "$K3S_INSTALLER_SHA256" "$installer_path" | sha256sum --check --status - \
     || die "official K3s installer checksum verification failed"
 
+chmod 0755 "$binary_path"
 binary_version=$("$binary_path" --version 2>&1)
 grep -F -- "$K3S_VERSION" <<<"$binary_version" >/dev/null \
     || die "downloaded K3s binary reports an unexpected version: $binary_version"
