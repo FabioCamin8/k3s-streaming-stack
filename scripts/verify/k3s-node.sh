@@ -30,7 +30,7 @@ daemonset_ready() {
 }
 
 wait_for_deployment() {
-    local namespace=$1 name=$2 attempts=${K3S_WAIT_SECONDS / 5}
+    local namespace=$1 name=$2 attempts=$((K3S_WAIT_SECONDS / 5))
     (( attempts > 0 )) || attempts=1
     for ((attempt = 1; attempt <= attempts; attempt++)); do
         deployment_ready "$namespace" "$name" && return 0
@@ -40,7 +40,7 @@ wait_for_deployment() {
 }
 
 wait_for_metrics() {
-    local attempts=${K3S_WAIT_SECONDS / 5} output
+    local attempts=$((K3S_WAIT_SECONDS / 5)) output
     (( attempts > 0 )) || attempts=1
     for ((attempt = 1; attempt <= attempts; attempt++)); do
         if output=$(kubectl top node --no-headers 2>/dev/null) && [[ -n $output ]]; then
