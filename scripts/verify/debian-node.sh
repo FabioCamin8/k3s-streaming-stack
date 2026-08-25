@@ -50,10 +50,20 @@ else
 fi
 
 cloud_init_status=''
-if cloud_init_status=$(cloud-init status --wait 2>&1); then
+cloud_init_rc=0
+cloud_init_status=$(cloud-init status --wait 2>&1) || cloud_init_rc=$?
+cloud_init_details=$(cloud-init status --long 2>&1 || true)
+if awk '
+    /^status: done$/ { done = 1 }
+    /^errors: \[\]$/ { no_errors = 1 }
+    END { exit (done && no_errors) ? 0 : 1 }
+' <<<"$cloud_init_details"; then
+    if (( cloud_init_rc != 0 )); then
+        warn "Cloud-Init completed with recoverable warnings (status exit $cloud_init_rc)"
+    fi
     pass "Cloud-Init completed"
 else
-    fail "Cloud-Init did not complete successfully: $cloud_init_status"
+    fail "Cloud-Init did not complete successfully: ${cloud_init_details:-$cloud_init_status}"
 fi
 
 if systemctl is-enabled --quiet qemu-guest-agent; then
