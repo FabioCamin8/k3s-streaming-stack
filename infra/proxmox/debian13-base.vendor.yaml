@@ -6,7 +6,7 @@ package_upgrade: false
 packages:
   - ca-certificates
   - curl
-  - dnsutils
+  - bind9-dnsutils
   - git
   - iproute2
   - iputils-ping
