@@ -112,10 +112,13 @@ for component in coredns traefik local-path-provisioner metrics-server; do
     fi
 done
 
-if daemonset_ready kube-system svclb-traefik; then
-    pass "ServiceLB daemonset kube-system/svclb-traefik is ready"
+svclb_name=$(kubectl -n kube-system get daemonsets -o name 2>/dev/null |
+    sed -n 's#^daemonset.apps/##p' |
+    awk '/^svclb-traefik(-|$)/ { print; exit }')
+if [[ -n $svclb_name ]] && daemonset_ready kube-system "$svclb_name"; then
+    pass "ServiceLB daemonset kube-system/$svclb_name is ready"
 else
-    fail "ServiceLB daemonset kube-system/svclb-traefik is not ready"
+    fail "ServiceLB Traefik daemonset is missing or not ready"
 fi
 if kubectl -n kube-system get service traefik >/dev/null 2>&1; then
     pass "Traefik Service exists"
