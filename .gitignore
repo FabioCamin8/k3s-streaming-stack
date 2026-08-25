@@ -1,0 +1,25 @@
+# Local environment and credential files
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+kubeconfig
+kubeconfig.*
+secrets.yaml
+*-secret.yaml
+*.secret.yaml
+
+# Local Kubernetes and tooling state
+.kube/
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Editor and operating-system noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
