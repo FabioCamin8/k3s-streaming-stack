@@ -98,9 +98,9 @@ Renovate is configured for Kubernetes references beneath `k8s/`, with automerge 
 
 ## 10. Roadmap
 
-1. Build the pinned Debian 13 template, clone `k3s01`, and verify the Debian baseline.
-2. Select and pin a supported K3s release, then install the single server only after the Debian baseline passes.
-3. Measure and validate the K3s CNI/Flannel MTU against the 9000-byte VM underlay; do not copy the underlay value blindly.
+1. Build the pinned Debian 13 template, clone `k3s01`, and verify the Debian baseline. (Validated.)
+2. Install the pinned single-node K3s server only after the Debian baseline passes. (Validated.)
+3. Measure and validate the K3s CNI/Flannel MTU against the 9000-byte VM underlay; do not copy the underlay value blindly. (Validated locally on one node.)
 4. Verify current AIOStreams and Remux image names, tags, ports, health behavior, persistence paths, and configuration requirements from their primary repositories.
 5. Add minimal Kubernetes-native manifests and example-safe configuration for the workloads.
 6. Add cert-manager and Traefik configuration using the supported K3s HelmChartConfig path, then validate staging certificates, ingress, persistence, redirect behavior, and rollback.
@@ -108,7 +108,12 @@ Renovate is configured for Kubernetes references beneath `k8s/`, with automerge 
 
 ## 11. Current project status
 
-The repository is in the Proxmox/Debian bootstrap phase. It contains the reproducible template and full-clone automation plus guest baseline verification, but no K3s installation has been performed by this project. No AIOStreams, Remux, cert-manager, or Traefik workload manifests are claimed as production-ready yet.
+The repository contains a validated Proxmox/Debian bootstrap and a pinned
+single-node K3s platform baseline. `k3s01` is Ready with bundled CoreDNS,
+Traefik, ServiceLB, local-path, and metrics-server validated through reboot;
+the observed Flannel overlay MTU is recorded in [`infra/k3s/README.md`](infra/k3s/README.md).
+No AIOStreams, Remux, cert-manager, Cloudflare integration, or application
+Ingress manifests have been deployed or claimed as production-ready.
 
 ## 12. Upstream and reference projects
 

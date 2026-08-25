@@ -2,7 +2,12 @@
 
 ## Platform boundary
 
-The deployment target is one Debian 13 VM on Proxmox VE. The current milestone creates that VM from a verified Cloud-Init template and stops at the Debian baseline. The VM will be the Kubernetes node in the later milestone and will own the guest kernel, cgroups, network namespace, and storage boundary. K3s will then run as the node distribution and supply its bundled containerd, CoreDNS, Traefik v3, ServiceLB, and local-path provisioner.
+The deployment target is one Debian 13 VM on Proxmox VE. The reproducible
+Cloud-Init template and full-clone Debian baseline have been executed and
+validated. The first K3s platform milestone then installs the pinned node
+distribution on `k3s01`; streaming applications remain outside that boundary.
+K3s supplies its bundled containerd, CoreDNS, Traefik v3, ServiceLB,
+local-path provisioner, and metrics-server.
 
 There is no Docker or Podman dependency. There is no second ingress controller. There is no claim of high availability: loss of the VM takes the cluster and its local data offline.
 
@@ -29,7 +34,10 @@ generic OS initialization.
 The network underlay is MTU 9000 end to end: physical network, Proxmox
 physical NIC, `vmbr`, VirtIO NIC, and Debian guest. The VM NIC declares MTU
 9000 explicitly. The K3s CNI/Flannel overlay MTU is not guessed or configured
-in this phase; it will be discovered and validated after K3s installation.
+before installation. The validated single-node result observes Flannel VXLAN
+with `cni0=8950`, `flannel.1=8950`, and temporary Pod `eth0=8950`; these values
+are measured overlay behavior, not an assumption that the CNI should use 9000.
+Multi-node overlay transport remains unvalidated.
 
 ## Request and data paths
 
