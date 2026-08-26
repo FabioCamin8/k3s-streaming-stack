@@ -183,9 +183,17 @@ and modes with `cp -a`, reloads systemd, starts K3s, and fails if the API does
 not return with one Ready node. It does not rotate secrets-encryption keys.
 The server token and encryption configuration must remain together; losing or
 changing either makes the encrypted datastore unrecoverable. A failed restore
-leaves the preserved pre-restore paths for an operator-directed rollback. The
-restore validates SQLite both before and after copying it, and never rotates
-secrets-encryption keys.
+uses an explicit phase state machine. Before destructive mutation, an error
+may restart the original K3s installation only when this script stopped an
+active service. Once any live state is being preserved or restored, failure is
+fail-closed: K3s is intentionally left stopped, no automatic restart or
+rollback is attempted, and the preserved `.pre-restore` paths are listed for
+operator-directed rollback or repair. After the restored state is installed,
+the starting phase also fails closed and stops K3s if readiness or
+secrets-encryption validation fails; the EXIT trap never attempts a second
+startup. The restore validates SQLite both before and after copying it, and
+never rotates secrets-encryption keys. Preserved state is never silently
+deleted.
 
 The recovery test procedure is to create a new disposable VM from the
 reproducible Debian/K3s infrastructure, give it a distinct VMID and MAC, and

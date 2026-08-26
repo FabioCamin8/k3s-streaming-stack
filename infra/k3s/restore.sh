@@ -8,7 +8,8 @@ EXPECTED_K3S_VERSION=''
 FORCE_RESTORE=0
 PRESERVE_STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 PRESERVED_PATHS=()
-K3S_STOPPED=0
+K3S_STOPPED_BY_SCRIPT=0
+RESTORE_PHASE='PRE_MUTATION'
 
 log() {
     printf '[INFO] %s\n' "$*" >&2
@@ -42,8 +43,9 @@ preserve_if_present() {
         preserved="${source}.pre-restore.${PRESERVE_STAMP}"
         [[ ! -e $preserved && ! -L $preserved ]] ||
             die "pre-restore path already exists: $preserved"
-        mv -- "$source" "$preserved"
+        RESTORE_PHASE='LIVE_STATE_PRESERVED_OR_RESTORE_IN_PROGRESS'
         PRESERVED_PATHS+=("$preserved")
+        mv -- "$source" "$preserved"
     fi
 }
 
@@ -236,10 +238,10 @@ restore_backup() {
 
     if systemctl is-active --quiet k3s; then
         log 'stopping K3s for destructive restore'
+        K3S_STOPPED_BY_SCRIPT=1
     else
         log 'K3s is already inactive; proceeding with destructive restore'
     fi
-    K3S_STOPPED=1
     systemctl stop k3s
     wait_for_stopped || die 'K3s did not stop within 30 seconds for restore'
 
@@ -251,6 +253,7 @@ restore_backup() {
     preserve_if_present /etc/default/k3s
     preserve_if_present /etc/sysconfig/k3s
 
+    RESTORE_PHASE='LIVE_STATE_PRESERVED_OR_RESTORE_IN_PROGRESS'
     copy_if_present var/lib/rancher/k3s
     copy_if_present etc/rancher/k3s
     copy_if_present etc/systemd/system/k3s.service
@@ -264,6 +267,7 @@ restore_backup() {
         die 'restored SQLite state.db failed read-only integrity_check'
     log 'restored SQLite state.db passed read-only integrity_check'
 
+    RESTORE_PHASE='RESTORE_INSTALLED_AND_STARTING'
     systemctl daemon-reload
     systemctl start k3s
     wait_for_recovery || die 'K3s did not recover after restore; pre-restore state was preserved'
@@ -271,33 +275,69 @@ restore_backup() {
         die 'K3s secrets encryption did not become healthy after restore'
 
     nodes=$(kubectl --kubeconfig=/etc/rancher/k3s/k3s.yaml get nodes --no-headers)
+    RESTORE_PHASE='RESTORE_SUCCEEDED'
     log "restored K3s $K3S_VERSION with one Ready node"
     log "restored node identity: $(awk 'NF { print $1; exit }' <<<"$nodes")"
     log 'secrets encryption remains enabled with matching server hashes'
     log 'pre-restore state preserved at:'
-    printf '  %s\n' "${PRESERVED_PATHS[@]}" >&2
+    print_preserved_paths
+}
+
+print_preserved_paths() {
+    local path listed=0
+
+    for path in "${PRESERVED_PATHS[@]}"; do
+        if [[ -e $path || -L $path ]]; then
+            printf '  %s\n' "$path" >&2
+            listed=1
+        fi
+    done
+    if (( ! listed )); then
+        printf '  (no completed pre-restore path was confirmed; inspect before repair)\n' >&2
+    fi
 }
 
 restore_cleanup() {
     local status=$?
 
-    if (( K3S_STOPPED )); then
-        printf '[INFO] restore did not complete; attempting to start K3s\n' >&2
-        if ! systemctl start k3s; then
-            printf '[ERROR] K3s failed to start after restore failure\n' >&2
-            status=1
-        elif ! wait_for_recovery; then
-            printf '[ERROR] K3s did not recover after restore failure\n' >&2
-            status=1
-        else
-            K3S_STOPPED=0
-            printf '[INFO] K3s recovered after restore failure; pre-restore paths remain available\n' >&2
-        fi
-    fi
+    case $RESTORE_PHASE in
+        PRE_MUTATION)
+            if (( K3S_STOPPED_BY_SCRIPT )); then
+                printf '[INFO] restore failed before destructive mutation; restarting original K3s\n' >&2
+                if ! systemctl start k3s; then
+                    printf '[ERROR] original K3s failed to start after pre-mutation restore failure\n' >&2
+                    status=1
+                elif ! wait_for_recovery; then
+                    printf '[ERROR] original K3s did not recover after pre-mutation restore failure\n' >&2
+                    status=1
+                else
+                    printf '[INFO] original K3s recovered after pre-mutation restore failure\n' >&2
+                fi
+            fi
+            ;;
+        LIVE_STATE_PRESERVED_OR_RESTORE_IN_PROGRESS|RESTORE_INSTALLED_AND_STARTING)
+            if ! systemctl stop k3s || ! wait_for_stopped; then
+                printf '[ERROR] could not confirm K3s is stopped after restore failure\n' >&2
+                status=1
+            else
+                printf '[ERROR] restore failed after destructive mutation began; K3s has intentionally been left stopped\n' >&2
+                printf '[ERROR] no automatic restart or rollback was attempted; operator-directed rollback or repair is required\n' >&2
+            fi
+            ;;
+        RESTORE_SUCCEEDED)
+            ;;
+        *)
+            printf '[ERROR] unknown restore phase %s; leaving K3s stopped\n' "$RESTORE_PHASE" >&2
+            if ! systemctl stop k3s || ! wait_for_stopped; then
+                printf '[ERROR] could not confirm K3s is stopped after unknown restore phase\n' >&2
+                status=1
+            fi
+            ;;
+    esac
 
-    if ((${#PRESERVED_PATHS[@]} > 0)); then
-        printf '[INFO] pre-restore state preserved at:\n' >&2
-        printf '  %s\n' "${PRESERVED_PATHS[@]}" >&2
+    if ((${#PRESERVED_PATHS[@]} > 0)) && [[ $RESTORE_PHASE != PRE_MUTATION ]]; then
+        printf '[INFO] preserved .pre-restore paths (never deleted):\n' >&2
+        print_preserved_paths
     fi
 
     exit "$status"
@@ -342,4 +382,3 @@ done
 
 trap restore_cleanup EXIT
 restore_backup
-K3S_STOPPED=0
