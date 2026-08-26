@@ -18,6 +18,13 @@ secrets.yaml
 *.tfstate
 *.tfstate.*
 
+# K3s recovery material (contains cluster credentials and encrypted state)
+/backup/
+/backups/
+/k3s-backups/
+*.k3s-backup/
+/.k3s-backup.*
+
 # Editor and operating-system noise
 .DS_Store
 .idea/
