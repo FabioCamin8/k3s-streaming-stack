@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tls-validation-whoami
+  namespace: default
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - __TLS_STAGING_HOST__
+      secretName: platform-staging-tls
+  rules:
+    - host: __TLS_STAGING_HOST__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tls-validation-whoami
+                port:
+                  name: http

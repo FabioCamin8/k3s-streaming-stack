@@ -1,8 +1,13 @@
 # Kubernetes configuration
 
-This tree is reserved for Kubernetes-native configuration. It currently contains no deployment YAML on purpose: image names, ports, health checks, persistence, and environment contracts for AIOStreams and Remux must be verified from their primary upstream repositories before they become declarative configuration.
+This tree contains only Kubernetes-native configuration whose contract has been
+verified. The cert-manager platform baseline is intentionally small; image
+names, ports, health checks, persistence, and environment contracts for
+AIOStreams and Remux remain deferred until they are verified from their primary
+upstream repositories.
 
 - [`infrastructure/`](infrastructure/README.md): cluster-level configuration that is proven necessary.
+- [`platform/cert-manager/`](platform/cert-manager/README.md): pinned TLS issuers, certificates, and a disposable Traefik route.
 - [`aiostreams/`](aiostreams/README.md): AIOStreams resources after upstream verification.
 - [`remux/`](remux/README.md): Remux resources after upstream verification.
 
