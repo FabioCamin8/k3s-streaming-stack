@@ -84,7 +84,7 @@ kube -n "$NAMESPACE" create secret generic "$SECRET_NAME" \
     kube apply --filename=- >/dev/null
 
 key_value=$(kube -n "$NAMESPACE" get secret "$SECRET_NAME" \
-    -o jsonpath='{.data.api-token}' 2>/dev/null || true)
+    -o "jsonpath={.data['api-token']}" 2>/dev/null || true)
 [[ -n $key_value ]] || die "Secret $NAMESPACE/$SECRET_NAME has no api-token key"
 
 printf 'PASS: Secret %s/%s exists with the expected key (value withheld)\n' \

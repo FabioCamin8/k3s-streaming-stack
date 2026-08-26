@@ -35,10 +35,9 @@ ready_condition() {
 }
 
 secret_key_exists() {
-    local namespace=$1 name=$2 key=$3 jsonpath_key value
-    jsonpath_key=${key//./\\.}
+    local namespace=$1 name=$2 key=$3 value
     value=$(kube -n "$namespace" get secret "$name" \
-        -o "jsonpath={.data.$jsonpath_key}" 2>/dev/null || true)
+        -o "jsonpath={.data['$key']}" 2>/dev/null || true)
     [[ -n $value ]]
     unset value
 }
@@ -120,6 +119,12 @@ for certificate in "$STAGING_CERTIFICATE_NAME" "$PRODUCTION_CERTIFICATE_NAME"; d
         fail "Certificate $certificate is not Ready"
     fi
 done
+
+if secret_key_exists "$CERT_MANAGER_NAMESPACE" cloudflare-api-token-secret api-token; then
+    pass "Cloudflare Secret $CERT_MANAGER_NAMESPACE/cloudflare-api-token-secret has api-token key (value withheld)"
+else
+    fail "Cloudflare Secret $CERT_MANAGER_NAMESPACE/cloudflare-api-token-secret is missing api-token key"
+fi
 
 for secret in "$STAGING_TLS_SECRET_NAME" "$PRODUCTION_TLS_SECRET_NAME"; do
     if secret_key_exists default "$secret" tls.crt && secret_key_exists default "$secret" tls.key; then
