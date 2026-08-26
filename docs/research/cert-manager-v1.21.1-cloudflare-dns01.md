@@ -39,4 +39,3 @@ Pin the official `v1.21.1` static manifest and verify its published asset digest
 - [cert-manager Cloudflare DNS-01 solver](https://cert-manager.io/docs/configuration/acme/dns01/cloudflare/)
 - [Cloudflare API-token permissions](https://developers.cloudflare.com/fundamentals/api/reference/permissions/) and [token creation/resource scoping](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
 - [Let's Encrypt ACME protocol endpoints](https://letsencrypt.org/docs/acme-protocol-updates/) and [staging environment](https://letsencrypt.org/docs/staging-environment/)
-
