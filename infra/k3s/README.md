@@ -222,3 +222,18 @@ and maintain more than one recovery copy. A lost node plus an unavailable
 private backup is a complete control-plane loss. This baseline introduces no
 application credentials and does not back up application data that does not yet
 exist.
+
+## cert-manager and TLS recovery boundary
+
+The cert-manager custom resources, ACME account keys, Certificate private keys,
+and certificate chains are Kubernetes objects in the K3s datastore. They are
+therefore included in this recovery boundary. The Cloudflare API-token
+Kubernetes Secret is encrypted at rest through K3s secrets encryption, but the
+private backup contains the token indirectly and must remain protected.
+
+Never place a Cloudflare token, certificate private key, generated certificate,
+kubeconfig, or private backup path in Git or public documentation. If a private
+backup is lost or exposed, revoke and rotate the Cloudflare API token as an
+operator security procedure, recreate the Secret, and verify certificate
+issuance before relying on renewal. Application secrets follow the same
+operator-managed model initially.

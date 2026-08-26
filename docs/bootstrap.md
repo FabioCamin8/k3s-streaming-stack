@@ -51,15 +51,13 @@ operator-run step; streaming applications remain later milestones.
 4. Stop at the validated platform baseline. Do not install cert-manager,
    configure Cloudflare, or deploy application workloads in this milestone.
 
-## Later workload milestones
+## TLS platform milestone
 
-1. Install cert-manager using its [official installation documentation](https://cert-manager.io/docs/installation/), selecting and recording an exact release. Do not create a production issuer before staging validation is complete.
-2. Create the Cloudflare API token out of band with the permissions and zone scope in [`cloudflare.md`](cloudflare.md). Deliver it to the cluster through an operator-controlled secret workflow; never place it in this repository.
-3. Apply only the verified infrastructure configuration. K3s's supported [HelmChartConfig mechanism](https://docs.k3s.io/helm) is the intended seam for bundled Traefik configuration.
-4. Verify current AIOStreams and Remux upstream contracts before adding their manifests: image reference, tag/digest behavior, listening port, health endpoint, required environment, persistence path, and startup/shutdown behavior.
-5. Deploy one workload at a time with one replica, local persistent storage, explicit ingress, and native application authentication/configuration protection.
-6. Validate using a Let's Encrypt staging issuer, private client checks, persistence restart tests, authentication checks, and Remux redirect behavior. Only then switch to production certificates.
-7. Record the observed release versions, image digests, backup location, and rollback command in private deployment notes. Promote only the redacted, reproducible parts to Git.
+1. Follow [`tls.md`](tls.md) to install the pinned cert-manager release, create the out-of-band Cloudflare Secret, issue a staging certificate, and validate the disposable Traefik TLS route.
+2. Only after staging succeeds, issue the host-specific production certificate, verify normal TLS, test lifecycle behavior with staging, and perform the controlled reboot proof.
+3. Verify current AIOStreams and Remux upstream contracts before adding their manifests: image reference, tag/digest behavior, listening port, health endpoint, required environment, persistence path, and startup/shutdown behavior.
+4. Deploy one workload at a time with one replica, local persistent storage, explicit ingress, and native application authentication/configuration protection.
+5. Record the observed release versions, image digests, backup location, and rollback command in private deployment notes. Promote only the redacted, reproducible parts to Git.
 
 ## Stop conditions
 
