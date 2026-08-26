@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: platform-production-certificate
+  namespace: default
+spec:
+  secretName: platform-production-tls
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  dnsNames:
+    - __TLS_PRODUCTION_HOST__
