@@ -45,8 +45,14 @@ external-dns, or a Traefik dashboard.
 7. Apply the `production` Kustomize root only after staging succeeds. Confirm
    the production issuer, certificate, Order, Challenge, TXT cleanup, correct
    SAN, and normal TLS verification for the selected host.
-8. Use staging for any repeated lifecycle/reissuance test. Do not deliberately
-   consume production issuance quota.
+8. Use the official [`cmctl renew`](https://cert-manager.io/docs/reference/cmctl/)
+   command for a lifecycle test against the staging Certificate. Record the
+   staging TLS Secret's resource version, run
+   `cmctl renew --namespace=default platform-staging-certificate`, wait for
+   the Certificate to become Ready again, and confirm the Secret resource
+   version changed. Inspect the resulting CertificateRequest, Order, and
+   Challenge for a successful reissuance. Do not deliberately consume
+   production issuance quota.
 9. Re-run the cert-manager verifier and perform one controlled K3s reboot.
    Repeat the K3s verifier, cert-manager verifier, issuer/certificate checks,
    and direct TLS request. A reboot alone must not require reissuance.
