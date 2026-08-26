@@ -551,8 +551,10 @@ capture_backup() {
 
     [[ ! -e $BACKUP_PATH && ! -L $BACKUP_PATH ]] ||
         die "backup destination appeared during capture; refusing to overwrite: $BACKUP_PATH"
-    mv -T -- "$STAGING_PATH" "$BACKUP_PATH" ||
+    mv --no-clobber -T -- "$STAGING_PATH" "$BACKUP_PATH" ||
         die "could not publish backup without overwriting destination: $BACKUP_PATH"
+    [[ ! -e $STAGING_PATH && ! -L $STAGING_PATH ]] ||
+        die "backup destination appeared during capture; refusing to overwrite: $BACKUP_PATH"
     STAGING_PATH=''
     verify_backup
 
