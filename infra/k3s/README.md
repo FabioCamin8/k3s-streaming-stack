@@ -100,3 +100,117 @@ and enabled secrets encryption at first start. `k3s secrets-encrypt status`
 reported encryption enabled, the active AES-CBC `aescbckey`, and matching
 server encryption hashes. Back up the database, token, and encryption
 configuration together through a private operator-controlled process.
+
+## Recovery baseline
+
+The installed `v1.36.3+k3s1` single-server recovery boundary was inspected on
+the running node. It is broader than `state.db` alone:
+
+- `/var/lib/rancher/k3s/` is preserved as a complete tree. This includes the
+  SQLite datastore and its `state.db-wal` companion when present, the server
+  token, `cred/encryption-config.json`, encryption state, certificates,
+  credential kubeconfigs, packaged manifests, and generated server state. The
+  `state.db-shm` shared-memory index is deliberately excluded because SQLite
+  regenerates it when the database is opened.
+- `/etc/rancher/k3s/` is preserved, including the generated client kubeconfig.
+- `/etc/systemd/system/k3s.service` and the K3s environment/drop-in paths are
+  preserved when present. The current installation has the generated service
+  unit and an empty service environment file, with no config YAML or drop-in.
+- The pinned K3s binary is not duplicated in the backup. Reprovision the exact
+  release with the checked-in bootstrap contract before restoring state.
+
+The deterministic backup layout is:
+
+```text
+<backup>/
+├── metadata/
+│   ├── backup-info.tsv   # non-secret version, topology, timing, and status
+│   ├── files.sha256      # SHA-256 per regular backed-up file
+│   ├── symlinks.tsv      # symlink paths and targets
+│   └── metadata.sha256   # hashes for the three metadata files above
+└── server-state/
+    ├── var/lib/rancher/k3s/
+    ├── etc/rancher/k3s/
+    └── etc/systemd/system/k3s.service[.env|.d/]
+```
+
+`server-state/` contains the sensitive recovery material. The metadata files
+contain no token, certificate, key, kubeconfig, or Secret contents; the hash
+manifests contain paths and digests only. `metadata.sha256` covers the metadata
+that drives restore decisions, while the data manifest covers the sensitive
+`server-state` tree. K3s/containerd directory symlinks are preserved and
+recorded in `symlinks.tsv`; they are part of the installed state layout.
+
+The backup uses a conservative stopped-service model. The helper verifies the
+active node and secrets-encryption status, stops K3s, waits for it to exit,
+copies the state into a mode-700 staging directory, validates SQLite with a
+read-only `PRAGMA integrity_check`, writes SHA-256 and symlink manifests,
+atomically renames the staging directory to the new destination, restarts K3s,
+and waits for one Ready node. It restarts K3s from its failure trap when a
+capture fails. Service downtime is accepted for this first single-node
+baseline because it avoids copying a live SQLite WAL inconsistently. A backup
+fails if the integrity tool is unavailable; this baseline does not accept an
+unverified SQLite copy.
+
+Run the capture and verification with a new private destination outside the
+checkout:
+
+```sh
+sudo ./infra/k3s/backup.sh /secure/backup-root/k3s01-<timestamp>
+sudo ./infra/k3s/backup.sh --verify /secure/backup-root/k3s01-<timestamp>
+sudo ./scripts/verify/k3s-backup.sh /secure/backup-root/k3s01-<timestamp>
+```
+
+The backup contains cluster credentials and encrypted cluster state. Keep it
+on encrypted, access-controlled storage separate from the Git checkout; do
+not upload it to a public artifact store and do not commit it. The hash
+manifest contains paths and digests only, never secret contents.
+
+Restore is deliberately destructive and requires both an exact installed K3s
+version and an explicit confirmation flag:
+
+```sh
+sudo ./infra/k3s/restore.sh \
+  --expected-k3s-version v1.36.3+k3s1 \
+  --force-restore \
+  /secure/backup-root/k3s01-<timestamp>
+```
+
+Restore verifies the backup before stopping K3s, validates `state.db` with a
+read-only SQLite `PRAGMA integrity_check`, moves existing K3s state/config and
+service files to adjacent timestamped `.pre-restore` paths, restores ownership
+and modes with `cp -a`, reloads systemd, starts K3s, and fails if the API does
+not return with one Ready node. It does not rotate secrets-encryption keys.
+The server token and encryption configuration must remain together; losing or
+changing either makes the encrypted datastore unrecoverable. A failed restore
+leaves the preserved pre-restore paths for an operator-directed rollback. The
+restore validates SQLite both before and after copying it, and never rotates
+secrets-encryption keys.
+
+The recovery test procedure is to create a new disposable VM from the
+reproducible Debian/K3s infrastructure, give it a distinct VMID and MAC, and
+attach it only to a host-only or otherwise isolated network that cannot expose
+a second control plane to the production LAN. Either install the exact pinned
+K3s release and transfer the private backup, or full-clone the source after the
+backup so the exact release and private backup are already present. If the
+isolated bridge has no DHCP, assign the disposable guest a temporary
+documentation-only RFC 5737 address and link-scoped route; do not connect it to
+the production LAN. Restore with `--force-restore`, then run the K3s verifier
+plus SQLite and secrets-encryption checks. Remove only the disposable VM and
+its temporary network resources after the test; never remove the production VM
+or the Debian template.
+
+This baseline was validated with that isolated full-clone procedure. The
+restored clone passed the exact-version K3s verifier, API and one-Ready-node
+checks, read-only SQLite integrity checks before and after restore, enabled
+secrets encryption with matching hashes, CoreDNS, Traefik, ServiceLB,
+local-path provisioner, metrics-server, and a non-sensitive Secret survival
+check. The temporary Secret was removed from both live clusters, the
+disposable recovery VMs were purged, and the production node remained healthy.
+
+Single-node embedded SQLite has no HA quorum or automatic remote backup. Store
+backups on encrypted, access-controlled storage separate from the Git checkout
+and maintain more than one recovery copy. A lost node plus an unavailable
+private backup is a complete control-plane loss. This baseline introduces no
+application credentials and does not back up application data that does not yet
+exist.
