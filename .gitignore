@@ -12,6 +12,16 @@ secrets.yaml
 *-secret.yaml
 *.secret.yaml
 
+# Operator-managed cert-manager configuration and rendered resources
+k8s/platform/cert-manager/operator.env
+k8s/platform/cert-manager/rendered/
+infra/cert-manager/operator/
+
+# Operator-managed cert-manager configuration and rendered resources
+k8s/platform/cert-manager/operator.env
+k8s/platform/cert-manager/rendered/
+infra/cert-manager/operator/
+
 # Local Kubernetes and tooling state
 .kube/
 .terraform/
