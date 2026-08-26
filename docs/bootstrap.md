@@ -1,9 +1,9 @@
 # Bootstrap sequence
 
-This is the intended sequence for a fresh deployment. The current repository
-milestone creates no Proxmox resources automatically during review; the
-commands below are the operator-run next step. K3s and applications remain
-separate later milestones.
+This is the intended sequence for a fresh deployment. The Proxmox/Debian
+template and `k3s01` full-clone lifecycle have been executed and validated with
+the repository automation. The pinned K3s platform bootstrap is a separate
+operator-run step; streaming applications remain later milestones.
 
 ## Prerequisites
 
@@ -36,18 +36,30 @@ separate later milestones.
 7. Stop here. Do not install K3s until the post-upgrade Debian verification is
    passing and the template/clone result has been reviewed.
 
-## Sequence
+## Validated K3s platform sequence
 
-1. After the Debian baseline passes, select a supported K3s release, record the exact version in private deployment notes, and install the single server using the [official K3s quick-start documentation](https://docs.k3s.io/quick-start). Do not disable the bundled Traefik installation.
-2. Measure and validate the resulting CNI/Flannel overlay MTU; do not copy the 9000-byte underlay value blindly.
-3. Confirm the node, CoreDNS, Traefik, ServiceLB, and local-path components are healthy before adding workloads. Record the K3s version, overlay MTU, and rendered component versions.
-4. Install cert-manager using its [official installation documentation](https://cert-manager.io/docs/installation/), selecting and recording an exact release. Do not create a production issuer before staging validation is complete.
-5. Create the Cloudflare API token out of band with the permissions and zone scope in [`cloudflare.md`](cloudflare.md). Deliver it to the cluster through an operator-controlled secret workflow; never place it in this repository.
-6. Apply only the verified infrastructure configuration. K3s's supported [HelmChartConfig mechanism](https://docs.k3s.io/helm) is the intended seam for bundled Traefik configuration.
-7. Verify current AIOStreams and Remux upstream contracts before adding their manifests: image reference, tag/digest behavior, listening port, health endpoint, required environment, persistence path, and startup/shutdown behavior.
-8. Deploy one workload at a time with one replica, local persistent storage, explicit ingress, and native application authentication/configuration protection.
-9. Validate using a Let's Encrypt staging issuer, private client checks, persistence restart tests, authentication checks, and Remux redirect behavior. Only then switch to production certificates.
-10. Record the observed release versions, image digests, backup location, and rollback command in private deployment notes. Promote only the redacted, reproducible parts to Git.
+1. After the Debian baseline and explicit `apt-get update`/`full-upgrade` gate
+   pass, use `infra/k3s/versions.env` as the release contract and run the
+   pinned installer. Do not use a moving stable channel or disable bundled
+   Traefik.
+2. Run `scripts/verify/k3s-node.sh`, inspect the actual Flannel/CNI interfaces
+   and MTUs, and validate temporary Pod DNS, Service networking, outbound
+   connectivity, local-path storage, metrics-server, and Traefik edge behavior.
+3. Perform one controlled reboot and repeat the K3s verifier and OS persistence
+   checks. Do not claim multi-node overlay validation from this single-node
+   topology.
+4. Stop at the validated platform baseline. Do not install cert-manager,
+   configure Cloudflare, or deploy application workloads in this milestone.
+
+## Later workload milestones
+
+1. Install cert-manager using its [official installation documentation](https://cert-manager.io/docs/installation/), selecting and recording an exact release. Do not create a production issuer before staging validation is complete.
+2. Create the Cloudflare API token out of band with the permissions and zone scope in [`cloudflare.md`](cloudflare.md). Deliver it to the cluster through an operator-controlled secret workflow; never place it in this repository.
+3. Apply only the verified infrastructure configuration. K3s's supported [HelmChartConfig mechanism](https://docs.k3s.io/helm) is the intended seam for bundled Traefik configuration.
+4. Verify current AIOStreams and Remux upstream contracts before adding their manifests: image reference, tag/digest behavior, listening port, health endpoint, required environment, persistence path, and startup/shutdown behavior.
+5. Deploy one workload at a time with one replica, local persistent storage, explicit ingress, and native application authentication/configuration protection.
+6. Validate using a Let's Encrypt staging issuer, private client checks, persistence restart tests, authentication checks, and Remux redirect behavior. Only then switch to production certificates.
+7. Record the observed release versions, image digests, backup location, and rollback command in private deployment notes. Promote only the redacted, reproducible parts to Git.
 
 ## Stop conditions
 
