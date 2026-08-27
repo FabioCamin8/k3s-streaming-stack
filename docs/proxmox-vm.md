@@ -37,9 +37,16 @@ deletes a partial VM automatically.
 `infra/proxmox/spawn-k3s-node.sh` performs a full clone and applies the
 project-specific profile: `k3s01`, 4 vCPU, host CPU, 6144 MiB fixed RAM,
 ballooning disabled, 40 GiB `scsi0`, VirtIO on the configurable bridge with
-explicit MTU 9000 by default, DHCP, Cloud-Init user and public key, QEMU
-agent, and start-on-boot. It refuses an existing target VMID or name and can
-leave the new clone powered off with `--no-start`.
+explicit MTU 9000 by default, DHCP, Cloud-Init user, QEMU agent, and
+start-on-boot. It refuses an existing target VMID or name and can leave the new
+clone powered off with `--no-start`.
+
+Cloud-Init credentials use the template as the default baseline: the user,
+password, and SSH public key are inherited by a clone. The spawn script does
+not manipulate the password. `--ci-user` may override the user, and
+`--ssh-public-key-file <path>` is an optional, intentional SSH-key override.
+Vendor-data keeps `PasswordAuthentication no`, so the inherited password is
+for local console, sudo, and recovery rather than SSH password login.
 
 The template remains reusable and Kubernetes-independent. K3s installation is
 the next milestone, after the guest baseline is verified.

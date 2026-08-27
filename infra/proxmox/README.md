@@ -67,8 +67,34 @@ disk. The default project profile is:
 | Guest integration | QEMU agent enabled |
 | Boot policy | start on boot; starts immediately unless `--no-start` is used |
 
-The clone command requires a public SSH key file. Key contents are read from
-that file and are never stored in this repository.
+The template is the credential baseline for every clone:
+
+```text
+template user + password + SSH key
+                 -> clone
+```
+
+The spawn script does not manipulate the Cloud-Init password. It is inherited
+from the template and remains available for local console, sudo, and recovery
+use. The vendor-data SSH policy disables password authentication, so it cannot
+be used for SSH password login.
+
+By default, omit `--ssh-public-key-file` and the clone retains the SSH public
+key configured on the template. Supply `--ssh-public-key-file` only when this
+clone should intentionally override that inherited key:
+
+```sh
+# Inherit the template user, password, and SSH key.
+sudo ./spawn-k3s-node.sh --storage <image-storage>
+
+# Override only the SSH key; the template password remains inherited.
+sudo ./spawn-k3s-node.sh --storage <image-storage> \
+  --ssh-public-key-file /secure/operator-secrets/clone-key.pub
+```
+
+The optional key file is validated with `ssh-keygen` and its contents are read
+only at clone time; key material is never stored in this repository. The
+`--ci-user` option can still override the inherited user where required.
 
 After the VM starts, wait for Cloud-Init before treating it as ready:
 
