@@ -1,8 +1,9 @@
 # TLS baseline
 
 This milestone establishes the smallest reproducible TLS foundation for the
-single-node K3s platform. It does not deploy AIOStreams, Remux, Authelia,
-external-dns, or a Traefik dashboard.
+single-node K3s platform. AIOStreams now consumes that foundation through the
+production Traefik entrypoint; Remux, Authelia, external-dns, and a Traefik
+dashboard remain outside scope.
 
 ## Decisions
 
@@ -54,8 +55,22 @@ external-dns, or a Traefik dashboard.
    Challenge for a successful reissuance. Do not deliberately consume
    production issuance quota.
 9. Re-run the cert-manager verifier and perform one controlled K3s reboot.
-   Repeat the K3s verifier, cert-manager verifier, issuer/certificate checks,
-   and direct TLS request. A reboot alone must not require reissuance.
+   Wait for QEMU Guest Agent and K3s/API readiness before running workload
+   checks; a namespace can be temporarily absent while the embedded datastore
+   is replaying. Repeat the K3s verifier, cert-manager verifier,
+   issuer/certificate checks, and direct TLS request. A reboot alone must not
+   require reissuance.
+
+## Validated boundary
+
+The current AIOStreams certificate is Ready after the controlled reboot. The
+redacted application evidence records successful health, public manifest,
+native authentication, and protected configuration checks through both normal
+DNS resolution and Cloudflare DoH with an ephemeral LAN-origin mapping. The
+mapping is a test aid only; it is not committed or persisted.
+
+See [`docs/validation/aiostreams-2026-08-27.md`](validation/aiostreams-2026-08-27.md)
+for the complete redacted workload/TLS evidence and explicit non-goals.
 
 ## Recovery boundary
 

@@ -1,9 +1,10 @@
 # Bootstrap sequence
 
 This is the intended sequence for a fresh deployment. The Proxmox/Debian
-template and `k3s01` full-clone lifecycle have been executed and validated with
-the repository automation. The pinned K3s platform bootstrap is a separate
-operator-run step; streaming applications remain later milestones.
+template, `k3s01` full-clone lifecycle, pinned K3s platform, and cert-manager
+DNS-01/TLS foundation have been executed and validated with the repository
+automation. AIOStreams is the current application milestone; Remux and the
+later security/update controllers remain separate phases in [`plan.md`](plan.md).
 
 ## Prerequisites
 
@@ -14,7 +15,7 @@ operator-run step; streaming applications remain later milestones.
 - A DHCP reservation and working guest DNS.
 - A private operator workstation with Git and, later, `kubectl`/`helm` if needed by the selected installation path.
 
-## Current milestone: Debian template and VM
+## Phase 0: Debian template and VM — validated
 
 1. Inspect storage and bridge choices with `pvesm status --content images`,
    `pvesm status --content snippets`, and `ip link show vmbr0`. Do not assume a
@@ -39,7 +40,7 @@ operator-run step; streaming applications remain later milestones.
    `package_upgrade: false` in vendor-data, then run `apt-get update`,
    `apt-get full-upgrade`, reboot if `/var/run/reboot-required` exists, and
    rerun the Debian verifier.
-7. Stop here. Do not install K3s until the post-upgrade Debian verification is
+7. Continue to the K3s phase only after the post-upgrade Debian verification is
    passing and the template/clone result has been reviewed.
 
 ## Validated K3s platform sequence
@@ -54,18 +55,24 @@ operator-run step; streaming applications remain later milestones.
 3. Perform one controlled reboot and repeat the K3s verifier and OS persistence
    checks. Do not claim multi-node overlay validation from this single-node
    topology.
-4. Stop at the validated platform baseline. Do not install cert-manager,
-   configure Cloudflare, or deploy application workloads in this milestone.
+4. Continue to the TLS phase after the validated platform baseline. Do not
+   infer application contracts from the platform alone.
 
-## TLS platform milestone
+## TLS platform milestone — validated
 
 1. Follow [`tls.md`](tls.md) to install the pinned cert-manager release, create the out-of-band Cloudflare Secret, issue a staging certificate, and validate the disposable Traefik TLS route.
 2. Only after staging succeeds, issue the host-specific production certificate, verify normal TLS, test lifecycle behavior with staging, and perform the controlled reboot proof.
-3. Verify current AIOStreams and Remux upstream contracts before adding their manifests: image reference, tag/digest behavior, listening port, health endpoint, required environment, persistence path, and startup/shutdown behavior.
-4. Deploy one workload at a time with one replica, local persistent storage, explicit ingress, and native application authentication/configuration protection.
-5. Record the observed release versions, image digests, backup location, and rollback command in private deployment notes. Promote only the redacted, reproducible parts to Git.
+3. Create the required application DNS record out of band. Keep the AIOStreams
+   origin DNS-only; the repository does not contain the real hostname or
+   address.
+4. Verify the current AIOStreams contract in
+   [`k8s/aiostreams/README.md`](../k8s/aiostreams/README.md), then copy its
+   `operator.env.example` to a protected location and render outside Git.
+5. Apply the rendered AIOStreams bundle, run the workload verifier, and record
+   the actual image digest and redacted lifecycle evidence in private operator
+   notes and the PR.
 
-## Stop conditions
+## Application stop conditions
 
 Stop before applying a manifest when any of these are unknown:
 
@@ -73,8 +80,18 @@ Stop before applying a manifest when any of these are unknown:
 - The container port, health behavior, or persistence path is guessed.
 - A required application secret or credential has no private delivery path.
 - The certificate issuer would use a production ACME endpoint before staging succeeds.
-- The proposed configuration requires Docker socket access, a second runtime, or a storage system outside v0.1 scope.
+- The proposed configuration requires Docker socket access, a second runtime,
+  or a storage system outside v0.1 scope.
+- The AIOStreams `SECRET_KEY`, native auth credentials, or public hostname has
+  no protected operator-file delivery path.
 
 ## First verification pass
 
-The first deployment pass should prove the smallest useful path: the node is healthy, Traefik routes a non-sensitive test response, staging certificates issue, each application survives a restart with its data intact, and Remux can redirect supported playback without proxying video through the node. A failed proof is a reason to stop and correct the responsible layer, not to add another component.
+The AIOStreams deployment pass should prove the smallest useful path: the node
+and platform are healthy, Traefik serves the production HTTPS host, native
+login protects configuration/admin access, the public Stremio manifest remains
+usable without a browser session, the PVC survives Pod recreation and a safe
+node reboot, and the actual Traefik source range is validated before trusting
+forwarded client IP headers. Provider-backed playback and Remux redirect
+behavior are later gates. A failed proof is a reason to correct the responsible
+layer, not to add another component.

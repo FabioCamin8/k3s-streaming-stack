@@ -1,6 +1,8 @@
 # Upgrade strategy
 
-Updates are proposed in Git and applied through a reviewed Kubernetes rollout. Runtime auto-update agents are intentionally not used.
+The current AIOStreams workload deliberately follows the upstream stable
+`latest` tag with `imagePullPolicy: Always`. Runtime auto-update agents are not
+deployed yet; future automation must be digest-aware and health-gated.
 
 ```text
 upstream release -> Renovate detects reference -> GitHub PR -> review and proof -> merge -> rollout
@@ -8,11 +10,11 @@ upstream release -> Renovate detects reference -> GitHub PR -> review and proof 
 
 ## Renovate policy
 
-[`renovate.json`](../renovate.json) enables the Kubernetes manager for files beneath `k8s/`, uses Renovate's recommended baseline, and disables automerge. The initial repository has no workload image references yet, so no image PR should be expected until verified manifests are added.
+[`renovate.json`](../renovate.json) enables the Kubernetes manager for files beneath `k8s/`, uses Renovate's recommended baseline, and disables automerge. The AIOStreams reference is intentionally mutable, so Renovate is not treated as the runtime updater for that image; platform and future immutable references remain reviewable.
 
 When manifests land:
 
-- Prefer an immutable versioned tag or digest that the upstream project documents.
+- Prefer an immutable versioned tag or digest that the upstream project documents. AIOStreams `latest` is the explicit current exception.
 - Keep image references easy for Renovate's Kubernetes manager to identify.
 - Keep AIOStreams and Remux updates reviewable separately when their compatibility risk differs.
 - Do not merge an image update solely because it is available; inspect release notes and run the relevant smoke checks.
@@ -28,7 +30,13 @@ Every workload update should answer:
 - Does ingress, TLS, authentication, and the Remux redirect path still work?
 - Is rollback to the previous tag or digest documented and possible?
 
-Remux is early-stage software and receives an explicit compatibility review even for apparently small updates. Automerge remains disabled, especially for Remux.
+For AIOStreams specifically, record the observed runtime digest, verify the
+DB-backed health endpoint and native authentication, confirm the local-path
+data boundary, and retain a known immutable previous image before enabling any
+automatic updater. A Deployment rollback alone is insufficient when `latest`
+has moved.
+
+Remux is early-stage software and receives an explicit compatibility review even for apparently small updates. Automerge remains disabled, especially for Remux. Keel is only a future candidate; it is not installed or authorized by this milestone.
 
 ## K3s and certificate upgrades
 
