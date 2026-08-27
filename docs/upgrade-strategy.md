@@ -1,23 +1,62 @@
 # Upgrade strategy
 
 The current AIOStreams workload deliberately follows the upstream stable
-`latest` tag with `imagePullPolicy: Always`. Runtime auto-update agents are not
-deployed yet; future automation must be digest-aware and health-gated.
+`latest` tag with `imagePullPolicy: Always`. No runtime application updater is
+deployed or claimed by this milestone. `Always` controls what a newly created
+or restarted Pod pulls; it does not detect a changed tag, prove an update was
+safe, or provide a rollback image.
+
+The current application path is operator-controlled:
 
 ```text
-upstream release -> Renovate detects reference -> GitHub PR -> review and proof -> merge -> rollout
+operator selects or restarts workload -> latest digest is pulled -> bounded verifier and smoke checks
 ```
+
+The intended future path is a separate, gated controller flow:
+
+```text
+stable release -> digest change observed -> bounded AIOStreams rollout -> health and smoke gates -> retain known recovery digest
+```
+
+## Future automatic application updates
+
+Keel is the leading candidate for the future observer/controller, but it is
+not installed or authorized here. Before enabling any updater, the project
+must prove all of the following for AIOStreams:
+
+- the release and digest are the intended architecture and compatible with
+  the recorded upstream contract;
+- database migrations, the `/app/data` persistence boundary, and the durable
+  `SECRET_KEY` have a tested recovery procedure;
+- the rollout waits for Deployment availability, DB-backed health, native
+  authentication/configuration, and an unauthenticated machine manifest check;
+- only the intended workload is changed, with bounded retries and an operator
+  visible failure state; and
+- the previous image is retained by immutable digest (or an equivalently
+  proven mechanism) and can be restored after a failed migration or rollout.
+
+The mutable `latest` tag makes a ReplicaSet rollback insufficient: a recreated
+Pod can pull newer bytes under the same tag. Automatic rollback is therefore
+not claimed until the previous-digest recovery drill passes. Breaking upstream
+changes, failed migrations, storage recovery, and exceptional failures may
+still require a human. Remux remains more conservative until its own contract
+and recovery path are validated.
 
 ## Renovate policy
 
-[`renovate.json`](../renovate.json) enables the Kubernetes manager for files beneath `k8s/`, uses Renovate's recommended baseline, and disables automerge. The AIOStreams reference is intentionally mutable, so Renovate is not treated as the runtime updater for that image; platform and future immutable references remain reviewable.
+[`renovate.json`](../renovate.json) enables the Kubernetes manager for files
+beneath `k8s/`, uses Renovate's recommended baseline, and disables automerge.
+Renovate is review-oriented dependency awareness for platform changes and
+explicit immutable references; it is not the runtime updater for the mutable
+AIOStreams `latest` tag. A Renovate PR is not evidence that an application
+rollout is safe.
 
 When manifests land:
 
 - Prefer an immutable versioned tag or digest that the upstream project documents. AIOStreams `latest` is the explicit current exception.
 - Keep image references easy for Renovate's Kubernetes manager to identify.
 - Keep AIOStreams and Remux updates reviewable separately when their compatibility risk differs.
-- Do not merge an image update solely because it is available; inspect release notes and run the relevant smoke checks.
+- Do not merge or roll out an image update solely because it is available; inspect release notes and run the relevant smoke checks.
 
 ## Review gates
 

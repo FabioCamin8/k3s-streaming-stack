@@ -44,9 +44,9 @@ Multi-node overlay transport remains unvalidated.
 
 ## Request and data paths
 
-1. A client resolves an application hostname through Cloudflare DNS.
-2. DNS traffic may be DNS-only or HTTP may be proxied by Cloudflare, according to the deliberate choice recorded in [`docs/cloudflare.md`](cloudflare.md).
-3. Traefik receives HTTP(S) traffic through the K3s networking path and routes by hostname to the selected Kubernetes Service.
+1. A client resolves an application hostname through Cloudflare DNS. An answer and a DNS-only record do not by themselves prove Internet reachability.
+2. If the origin is reachable, DNS-only traffic goes directly to the Traefik origin; if HTTP proxying is deliberately enabled, traffic first enters through Cloudflare's edge, according to the choice recorded in [`docs/cloudflare.md`](cloudflare.md).
+3. Traefik receives HTTP(S) traffic through the reachable K3s networking path and routes by hostname to the selected Kubernetes Service.
 4. Traefik routes the public AIOStreams HTTPS host to its ClusterIP Service.
 5. AIOStreams handles stream aggregation and keeps its application data and default disk caches under persistent `/app/data`.
 6. Remux is a future client-facing layer. It may call AIOStreams and, where supported, return an HTTP redirect to an upstream/debrid URL so video bytes bypass the K3s host.
@@ -67,7 +67,7 @@ security, and configuration assumptions have a primary-source basis.
 ## Trust boundaries
 
 - The VM is the infrastructure boundary; Proxmox and the guest are separate administration domains.
-- Traefik is the only public ingress boundary.
+- Traefik is the intended sole ingress boundary; external reachability still depends on DNS, firewall, NAT, and routing outside Kubernetes and is not implied by an Ingress object.
 - AIOStreams native authentication protects human/admin/configuration surfaces;
   public Stremio machine paths are not blanket-protected by an external
   ForwardAuth. Future Authelia integration must remain selective.

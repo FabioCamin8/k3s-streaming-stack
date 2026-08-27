@@ -29,6 +29,14 @@ compare API](https://api.github.com/repos/Viren070/AIOStreams/compare/f36d0f93ff
 reports `main` ahead by 66 commits. Therefore `latest` is a stable-release
 alias, not a continuously rebuilt pointer to every commit on `main`.
 
+This revision boundary was rechecked on 2026-08-27. The OCI `latest` and
+`v2.33.2` references both returned the index digest above; the index contained
+exactly two runnable platforms (`linux/amd64` and `linux/arm64`) plus two
+`unknown/unknown` attestation manifests. The source-backed statements below
+are anchored to current `main` unless a release tag is named explicitly; the
+published `latest` image is the `v2.33.2` bytes, not the unreleased `main`
+checkout.
+
 ## Image, release, and runtime contract
 
 The official [`deploy-docker.yml`](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/.github/workflows/deploy-docker.yml#L27-L59)
@@ -53,7 +61,8 @@ configs independently report `ExposedPorts: {"3000/tcp": {}}`, `WorkingDir:
 "/app"`, entrypoint `/nodejs/bin/node`, and the same server command. Their
 config records report `User: "0"` (root); the Dockerfile does not add a
 `USER` directive. The [amd64 image config blob](https://ghcr.io/v2/viren070/aiostreams/blobs/sha256:bb201c6e37db28caa7c96c8d5ad2977147109737f5f1446db66cf9177b70f4ee)
-is the registry evidence for that identity. Do not claim that the upstream
+and [arm64 image config blob](https://ghcr.io/v2/viren070/aiostreams/blobs/sha256:4395d574d8fdbdaa38ecee4b6b964baf0b75b98fc3d7d07240c59f15397df864)
+are the registry evidence for that identity. Do not claim that the upstream
 image is rootless or force `runAsNonRoot` based on an assumption.
 
 ## Bootstrap variables, data, SQLite, and writable paths
@@ -111,7 +120,8 @@ and [cache-folder resolver](https://github.com/Viren070/AIOStreams/blob/6c7c2daa
 The disk cache is a namespaced, byte-bounded LRU with an index and files; its
 load/write failures are treated as best-effort and can fall back to
 memory-only operation ([implementation](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/core/src/utils/disk-backed-cache.ts#L98-L108)
-and [load behavior](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/core/src/utils/disk-backed-cache.ts#L177-L219)).
+and [load behavior](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/core/src/utils/disk-backed-cache.ts#L177-L219),
+and [write behavior](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/core/src/utils/disk-backed-cache.ts#L280-L406)).
 
 `/app/data` is broader than just the SQLite file. The source also persists the
 instance identity there and places optional downloaded datasets below that
@@ -137,11 +147,16 @@ The migration runner creates `_migrations`, applies pending migrations in
 transactions, detects and baselines a pre-existing v2 `users` schema, and
 fails if the database is newer than the running code
 ([runner](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/core/src/db/migrations/runner.ts#L105-L165)).
+The release-tag [migration index](https://github.com/Viren070/AIOStreams/blob/f36d0f93ff088280526ebca1fe3c93e2740b6987/packages/core/src/db/migrations/index.ts#L1-L42)
+ends at migration `0019`; current `main` adds `0020` through `0023`
+([current index](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/core/src/db/migrations/index.ts#L1-L50)).
+Those newer migrations are not evidence that the currently published
+`latest` image contains the current `main` schema. Migrations are intended to
+be idempotent on each boot, but an unknown newer schema is a deliberate startup
+failure rather than an automatic downgrade.
 The server then initializes database-backed configuration and other services,
 ensures the configuration access key/auth state, and only calls `listen()`
 after those steps ([startup order](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/server/src/server.ts#L279-L324)).
-Migrations are intended to be idempotent on each boot, but an unknown newer
-schema is a deliberate startup failure rather than an automatic downgrade.
 
 There are two relevant health contracts:
 
@@ -237,16 +252,18 @@ Kubernetes reverse-proxy path. It must be replaced with the narrowly observed
 Traefik-to-application source range for the actual topology.
 
 The implementation has two distinct behaviors
-([`ip.ts`](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/server/src/middlewares/ip.ts#L44-L75)):
+([`ip.ts`](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/server/src/middlewares/ip.ts#L35-L75)):
 
 - `requestIp` uses `X-Forwarded-For` (first value), then `CF-Connecting-IP`,
   only when the immediate `req.ip` is in `TRUSTED_IPS`; otherwise it uses the
   immediate address and ignores those forwarded values.
 - `userIp` considers several user-supplied headers, including
   `X-AIOStreams-User-IP`, `X-Client-IP`, `X-Forwarded-For`, `X-Real-IP`, and
-  `CF-Connecting-IP`, regardless of `TRUSTED_IPS`, but discards invalid and
-  private values. The upstream schema explicitly documents that user IP is
-  always trusted via headers. Thus `TRUSTED_IPS` does not protect every
+  `CF-Connecting-IP`, regardless of `TRUSTED_IPS`, but only accepts syntactically
+  valid values and applies a narrow source regex for selected RFC1918 IPv4
+  ranges, loopback, and `::1`. It is not a comprehensive IPv6 ULA/link-local
+  private-address filter. The upstream schema explicitly documents that user
+  IP is always trusted via headers. Thus `TRUSTED_IPS` does not protect every
   header-derived IP decision; it primarily gates the `requestIp` path.
 
 The CIDR helper converts dotted IPv4 addresses; its CIDR branch is not a full
@@ -277,10 +294,39 @@ following are material clarifications or corrections:
    credential pairs and a fuller permission model.
 6. **IP trust:** `TRUSTED_IPS` gates `requestIp` forwarded-header use, but the
    separate `userIp` path accepts valid public values from several headers
-   without that gate; the note's shorter description is incomplete.
+   without that gate, and its private-address check is not comprehensive for
+   IPv6; the note's shorter description is incomplete.
 7. **Persistent scope:** `/app/data` contains SQLite plus cache and optional
    dataset/identity files. A cache-only description understates the writable
    application state.
+8. **Release/source boundary:** the published `latest` image is still
+   `v2.33.2`, while current `main` is 66 commits ahead and has four newer
+   migrations. Do not use current-`main` migration numbers as proof of the
+   released image's schema.
+
+## Release compatibility and breaking changes
+
+The latest release API entry for [`v2.33.2`](https://api.github.com/repos/Viren070/AIOStreams/releases/latest)
+contains only two bug-fix notes (usenet archive inner-file typing and variant
+path selectors); it contains no newer breaking-change or migration notice.
+The official [v2.30 migration guide](https://github.com/Viren070/AIOStreams/blob/f36d0f93ff088280526ebca1fe3c93e2740b6987/packages/docs/content/docs/migrations/v2.30.mdx#L40-L215)
+does document the compatibility breaks that still matter to a self-hosted
+upgrade:
+
+- deprecated per-service credential variables, addon host/port/protocol rewrite
+  variables, public-proxy rewrite variables, old regex/log settings, and dead
+  PTT settings were removed in favor of consolidated settings;
+- `ADDON_PASSWORD` was replaced by native session login and the managed config
+  access key. An upgrade must retain `ADDON_PASSWORD` for at least one startup
+  so existing configurations can be migrated, and must configure
+  `AIOSTREAMS_AUTH`; and
+- User API operations moved from query/body UUID/password fields to
+  `Authorization: Basic` (the `HEAD` existence check and create request shape
+  were retained).
+
+The guide states that existing Stremio installation URLs and stored
+configurations continue to work across v2.30. These are compatibility
+requirements, not evidence of a new v2.33.2 break.
 
 The existing note's core conclusions remain supported: the official image is
 the GHCR `latest` image, the default port is 3000, the default SQLite file is
@@ -317,9 +363,10 @@ has been changed or validated.
 ## Primary sources
 
 - [AIOStreams repository](https://github.com/Viren070/AIOStreams), [current `main` commit API](https://api.github.com/repos/Viren070/AIOStreams/commits/main), [latest release API](https://api.github.com/repos/Viren070/AIOStreams/releases/latest), and [release-to-main compare API](https://api.github.com/repos/Viren070/AIOStreams/compare/f36d0f93ff088280526ebca1fe3c93e2740b6987...6c7c2daa08c3695e521e5ba1eb279634d1923298)
+- [v2.30 migration guide](https://github.com/Viren070/AIOStreams/blob/f36d0f93ff088280526ebca1fe3c93e2740b6987/packages/docs/content/docs/migrations/v2.30.mdx) and [published v2.33.2 release](https://github.com/Viren070/AIOStreams/releases/tag/v2.33.2)
 - [Official environment-variable documentation](https://docs.aiostreams.viren070.me/configuration/environment-variables)
 - [`.env.sample`](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/.env.sample), [Dockerfile](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/Dockerfile), and [stable image workflow](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/.github/workflows/deploy-docker.yml)
-- [GHCR package page](https://github.com/Viren070/AIOStreams/pkgs/container/aiostreams), [OCI `latest` index](https://ghcr.io/v2/viren070/aiostreams/manifests/latest), and [observed amd64 config blob](https://ghcr.io/v2/viren070/aiostreams/blobs/sha256:bb201c6e37db28caa7c96c8d5ad2977147109737f5f1446db66cf9177b70f4ee)
+- [release migration index](https://github.com/Viren070/AIOStreams/blob/f36d0f93ff088280526ebca1fe3c93e2740b6987/packages/core/src/db/migrations/index.ts), [current-main migration index](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/core/src/db/migrations/index.ts), [GHCR package page](https://github.com/Viren070/AIOStreams/pkgs/container/aiostreams), [OCI `latest` index](https://ghcr.io/v2/viren070/aiostreams/manifests/latest), [observed amd64 config blob](https://ghcr.io/v2/viren070/aiostreams/blobs/sha256:bb201c6e37db28caa7c96c8d5ad2977147109737f5f1446db66cf9177b70f4ee), and [observed arm64 config blob](https://ghcr.io/v2/viren070/aiostreams/blobs/sha256:4395d574d8fdbdaa38ecee4b6b964baf0b75b98fc3d7d07240c59f15397df864)
 - [Configuration/environment source](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/core/src/utils/env.ts), [API schema](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/core/src/config/schema/api.ts), and [OIDC schema](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/core/src/config/schema/oidc.ts)
 - [Application route map](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/server/src/app.ts), [Stremio alias route](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/server/src/routes/stremio/alias.ts), [native auth routes](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/server/src/routes/api/auth/index.ts), [auth middleware](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/server/src/middlewares/auth.ts), [user-data middleware](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/server/src/middlewares/userData.ts), and [IP middleware](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/server/src/middlewares/ip.ts)
 - [Stremio manifest route](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/server/src/routes/stremio/manifest.ts), [stream route](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/server/src/routes/stremio/stream.ts), [health route](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/packages/server/src/routes/api/health.ts), and [container healthcheck](https://github.com/Viren070/AIOStreams/blob/6c7c2daa08c3695e521e5ba1eb279634d1923298/scripts/healthcheck.js)

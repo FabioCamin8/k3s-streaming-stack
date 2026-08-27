@@ -87,8 +87,11 @@ See [`docs/proxmox-vm.md`](docs/proxmox-vm.md) and [ADR-0001](docs/decisions/000
 Cloudflare is the DNS authority. The validated cert-manager platform obtains
 certificates through Let's Encrypt DNS-01 using a Cloudflare API token limited
 to DNS edit and zone read for the one relevant zone. The real token is supplied
-out of band and never stored in Git. The AIOStreams hostname remains DNS-only
-so clients reach the Traefik origin directly.
+out of band and never stored in Git. The AIOStreams hostname is configured
+DNS-only to select direct-origin semantics; DNS-only does not itself prove that
+the origin is reachable from the public Internet. The current evidence
+validates the HTTPS route from the operator network, while external reachability
+remains a separate unresolved gate; see the validation report.
 
 The initial operational default is DNS-only during bring-up. This keeps the client-to-edge behavior easy to observe and avoids making Cloudflare the assumed streaming proxy. HTTP proxying can be enabled deliberately per hostname after confirming the workload behavior, Cloudflare terms and limits, and Traefik trusted-proxy configuration. If proxying is enabled, Traefik must trust `X-Forwarded-*` headers only from Cloudflare's current published IP ranges, never from arbitrary clients.
 
@@ -108,16 +111,19 @@ See [`docs/cloudflare.md`](docs/cloudflare.md) for the DNS-01, proxy, and certif
 
 ## 9. Update strategy
 
-The target workload flow is:
+The intended future workload flow is:
 
 ```text
-stable upstream release -> digest detection -> controlled Kubernetes rollout -> health/readiness validation
+stable upstream release -> digest detection -> controlled Kubernetes rollout -> health/readiness and recovery validation
 ```
 
-This milestone does not deploy the future updater. AIOStreams intentionally
-tracks stable `latest`; Keel is the leading future candidate, subject to
-mutable-tag rollback proof. Renovate remains useful for reviewed platform
-awareness, with automerge disabled. See [`docs/upgrade-strategy.md`](docs/upgrade-strategy.md), [`docs/plan.md`](docs/plan.md), and [`docs/decisions/0006-automatic-application-updates.md`](docs/decisions/0006-automatic-application-updates.md).
+This milestone does not deploy an automatic application updater. AIOStreams
+intentionally tracks stable `latest`; Keel is the leading future candidate,
+subject to digest observation, health gates, and mutable-tag rollback proof.
+Renovate remains review-oriented platform/dependency awareness, with automerge
+disabled. See [`docs/upgrade-strategy.md`](docs/upgrade-strategy.md),
+[`docs/plan.md`](docs/plan.md), and
+[`docs/decisions/0006-automatic-application-updates.md`](docs/decisions/0006-automatic-application-updates.md).
 
 ## 10. Roadmap
 

@@ -6,89 +6,106 @@ This is a redacted operator report. It intentionally omits the deployment
 hostname, node and origin addresses, credentials, cookies, kubeconfig data, and
 private backup paths.
 
-## Resource and topology gates
+## Deployment and manifest gates
 
-- The updated `scripts/verify/aiostreams.sh` passed all 16 workload/TLS gates
-  after the final controlled node reboot.
-- K3s is active and enabled with one Ready node.
-- Traefik is the present IngressClass and Service; the AIOStreams Service has
+- The current `scripts/verify/aiostreams.sh` passed all 19 gates after the
+  final controlled VM reboot, using a bounded 30-second readiness wait.
+- The rendered manifests passed a remote Kubernetes server-side dry-run. The
+  subsequent apply was scoped to the AIOStreams bundle: Namespace, Service,
+  PVC, Deployment, and Ingress were unchanged; the bootstrap Secret was
+  configured from protected operator values.
+- K3s was active with one Ready node. The `streaming` namespace was Active.
+- The Deployment had one ready replica and `Recreate` strategy; the image was
+  `ghcr.io/viren070/aiostreams:latest` with `Always` pull policy.
+- The Service was `ClusterIP` port 80 to the named HTTP container port and had
   a ready endpoint.
-- The `streaming` namespace is Active. The Deployment has one ready replica and
-  `Recreate` strategy; the image is `:latest` with `Always` pull policy.
-- The PVC is Bound on `local-path`.
-- The bound local-path PV uses its node-local `.spec.local.path`; the backing
-  directory existed during the final check and contained 124,422,873 bytes.
-- The bootstrap Secret contains all required keys; values were withheld.
-- The AIOStreams Certificate is Ready.
-- Metrics-server reported AIOStreams at `1m/333Mi` and the node at
-  `155m/1932Mi` during the final check.
-- The configured trusted-proxy range matches the observed node PodCIDR; neither
-  value is published here.
+- The PVC was Bound on `local-path`. Its node-local backing directory existed
+  during validation; this is application state, not a remote backup.
+- The bootstrap Secret contained `BASE_URL`, `SECRET_KEY`, `DATABASE_URI`,
+  `AIOSTREAMS_AUTH`, `AIOSTREAMS_AUTH_REQUIRED`, and `TRUSTED_IPS`; values were
+  withheld.
+- The Traefik Ingress and production Certificate were present; the
+  Certificate was Ready.
 - The running image digest was observed as
   `sha256:b169ccfb2b6f351f1bc5a8a460e4e102db77a11fb4fc58222e411d96b3adb85b`.
 
-## HTTPS and authentication
+## HTTPS, authentication, and application behavior
 
-The application DNS record is DNS-only and was created out of band. Normal
-DNS returned an answer, while direct HTTPS from the validating LAN was blocked
-by the local hairpin path. An ephemeral operator-side origin mapping then
-validated the actual Traefik route without persisting the mapping:
+The AIOStreams record is configured DNS-only and was created out of band. The
+actual Traefik HTTPS route was validated internally using a temporary
+operator-side resolve mapping. No mapping or private address was persisted.
 
-| Path | Normal resolver | Cloudflare DoH |
-| --- | ---: | ---: |
-| `/api/v1/health` | 200 | 200 |
-| `/stremio/manifest.json` | 200 | 200 |
-| unauthenticated `/stremio/configure` | 302 | 302 |
-
-With the same ephemeral mapping and temporary cookie jar:
-
-| Native path | Status |
+| Check | Result |
 | --- | ---: |
-| `POST /api/v1/auth/login` | 200 |
-| authenticated `GET /api/v1/auth/me` | 200 |
-| authenticated `GET /stremio/configure` | 200 |
-
-The unauthenticated `GET /api/v1/user` probe returned 400 because the route
-requires Basic auth; it is not an acceptance gate.
-
-The current `v2.33.2` release requires `sortCriteria.global`, a valid
-`formatter.id`, and a `presets` array even when no providers are configured.
-Using the source-backed provider-free payload
-`{"sortCriteria":{"global":[]},"formatter":{"id":"torrentio"},"presets":[]}`
-with a transient native admin session produced one user configuration:
-
-| Operation | Status/result |
-| --- | ---: |
-| `POST /api/v1/user` | 201 |
+| DB-backed `GET /api/v1/health` | 200 |
+| unauthenticated `GET /stremio/manifest.json` | 200 |
+| unauthenticated `GET /stremio/configure` | 302 |
+| native login | 200 |
+| authenticated session lookup | 200 |
+| authenticated configure page | 200 |
+| provider-free user creation | 201 |
 | generated configured manifest | 200, `configurationRequired=false` |
-| same user/manifest after Pod recreation | 200, `configurationRequired=false` |
-| same user/manifest after controlled VM reboot | 200, `configurationRequired=false` |
+| authenticated user retrieval | 200 |
 
-The user retrieval checks used Basic auth with the generated UUID and the
-transient configuration password. No provider or debrid credentials were
-used.
+The provider-free payload was:
 
-## Recovery evidence
+```json
+{"sortCriteria":{"global":[]},"formatter":{"id":"torrentio"},"presets":[]}
+```
 
-- The first post-reboot verifier attempt was a timing race: it ran before K3s
-  became active and reported the namespace as absent. The K3s database and WAL
-  were subsequently confirmed present under `server/db/`; no application data
-  loss occurred.
-- The verifier waits for the target namespace and then the Deployment's
-  `Available` condition for up to `WAIT_SECONDS` before evaluating dependent
-  resources, while still failing closed on timeout. This avoids accepting a
-  stale Deployment status during K3s reboot replay.
-- In the final controlled reboot proof, QEMU Guest Agent recovered in 8.9
-  seconds. The workload verifier completed after the K3s/API readiness wait and
-  passed all 16 gates. The PVC and runtime image digest remained valid.
-- Pod recreation and post-recreation persistence passed before the final reboot
-  proof; after the reboot, the verifier waited for actual Deployment
-  availability before repeating the user/manifest check. The application data
-  remains node-local and is not a backup.
+User retrieval used Basic auth with the generated UUID and transient
+configuration password. No provider or debrid credentials were used, and
+provider-backed playback is not claimed.
+
+## Persistence and reboot proof
+
+- The exact current AIOStreams Pod was deleted. The replacement Pod had a
+  different UID, and the same user and configured manifest survived with
+  `configurationRequired=false`.
+- A controlled VM reboot completed. SSH access recovered in 28 seconds.
+- The first post-reboot API check encountered a transient readiness race; a
+  bounded retry waited for K3s/API availability and then all focused checks
+  passed: health, base manifest, unauthenticated configure redirect, native
+  login/session/configure, user retrieval, and configured manifest.
+- The repository verifier was rerun after reboot with `WAIT_SECONDS=30` and
+  passed all 19 gates. PVC state, the running image digest, and the
+  application configuration remained valid.
+- After reboot, metrics-server reported AIOStreams at `1m/333Mi` and the node
+  at `123m/1972Mi`.
+
+K3s datastore backup does not include local-path PVC files. Recovery therefore
+requires the AIOStreams application data and the same durable `SECRET_KEY`; a
+Deployment rollback alone is not reliable while `latest` is mutable.
+
+## Trusted proxy proof
+
+Live topology inspection confirmed that Traefik runs as a Deployment Pod rather
+than host-networked, and its Pod address is within the node PodCIDR. The
+configured `TRUSTED_IPS` contains that exact PodCIDR; the private values are
+not published. The Service uses `externalTrafficPolicy=Cluster`.
+
+Through the real HTTPS Traefik route, reserved test `X-Forwarded-For` values
+produced one shared rate-limit bucket (`4 -> 3 -> 2`) rather than independent
+identities. This is bounded evidence for the tested path that arbitrary
+client-supplied forwarded headers did not create separate rate-limit buckets;
+it is not a claim that every application header-derived IP behavior is
+protected by `TRUSTED_IPS`.
+
+## DNS and external reachability limitation
+
+Cloudflare authoritative DNS-over-HTTPS currently returns one A record that is
+classified as RFC1918/private. An external AWS vantage point timed out with
+HTTP `000`, while the internal K3s route works. The production certificate,
+Traefik route, and application checks therefore prove the internally reachable
+HTTPS path only; Internet reachability is not currently verified.
+
+This PR does not change DNS, NAT, firewall, router, or origin-address state.
+The limitation remains an operator follow-up gate and must be resolved before
+claiming public Internet availability.
 
 ## Explicit gaps
 
-Provider-backed playback, Remux, Authelia, automatic image updates, HA, and
-remote application-data backup/restore remain future gates. The mutable
-`latest` tag has no automatic rollback claim; a future updater must retain a
-known immutable recovery image before it is enabled.
+Provider-backed playback, Remux, selective Authelia, automatic image updates,
+HA, external application-data backup/restore, and mutable-tag rollback drills
+remain future gates. Keel is only a future candidate; no updater or automatic
+rollback is deployed.

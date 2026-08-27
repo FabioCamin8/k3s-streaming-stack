@@ -2,8 +2,10 @@
 
 Cloudflare is the DNS provider for the deployment. It is not assumed to be the
 video proxy, application authentication layer, or secret store. The current
-AIOStreams record is DNS-only and its hostname and address are operator data,
-not repository data.
+AIOStreams record is configured DNS-only to select direct-origin semantics;
+that setting, the certificate, and an internal HTTPS route check do not prove
+public Internet reachability. Its hostname and address are operator data, not
+repository data.
 
 ## DNS-01 certificate flow
 
@@ -36,15 +38,18 @@ If proxying is enabled:
 
 ## DNS records
 
-Create only the application records that are required, using deployment-specific values outside Git. The validated application record is a single DNS-only A record for the Traefik origin. Keep the public repository limited to example names and omit real addresses. A DNS record does not by itself expose a Kubernetes Service; Traefik ingress and any external firewall/NAT remain separate controls.
+Create only the application records that are required, using deployment-specific values outside Git. The configured application record is a single DNS-only A record intended for the Traefik origin. Keep the public repository limited to example names and omit real addresses. A DNS record does not by itself expose a Kubernetes Service; Traefik ingress and any external firewall/NAT remain separate controls.
 
 The record was created out of band with the scoped cert-manager operator token.
-Public DNS-over-HTTPS observed the record. A local resolver may continue to
-serve a cached negative answer for a short time, so DNS propagation evidence and
-the HTTPS route check are separate gates. From a LAN client, direct access to a
-public DNS-only address can also be blocked by router hairpin policy; the live
-route was validated with an ephemeral operator-side resolve mapping to the
-origin, without persisting that mapping or publishing its address.
+Public DNS-over-HTTPS observed the record, but the authoritative answer
+currently classifies the origin as private and an external vantage point timed
+out. The internal route works; therefore certificate and HTTPS evidence are
+currently internal validation only, not proof of public Internet reachability.
+A local resolver may also serve a cached negative answer for a short time, so
+DNS evidence and the HTTPS route check remain separate gates. The live internal
+route was validated with an ephemeral operator-side resolve mapping, without
+persisting that mapping or publishing its address. This repository does not
+change DNS, NAT, firewall, or router state.
 
 ## Operational checks
 
@@ -56,3 +61,5 @@ origin, without persisting that mapping or publishing its address.
   the application verifier and redacted evidence are recorded in
   [`docs/validation/aiostreams-2026-08-27.md`](validation/aiostreams-2026-08-27.md).
 - If proxying is enabled, confirm the observed client IP and scheme are derived only from trusted Cloudflare sources.
+- Confirm Internet reachability from an independent external vantage point;
+  internal DNS, certificate, and Traefik checks are not a substitute.
