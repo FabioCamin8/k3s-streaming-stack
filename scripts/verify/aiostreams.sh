@@ -43,7 +43,8 @@ else
     fail "namespace $NAMESPACE is missing"
 fi
 
-if "$KUBECTL" -n "$NAMESPACE" rollout status deployment/aiostreams \
+if "$KUBECTL" -n "$NAMESPACE" wait \
+    --for=condition=available deployment/aiostreams \
     --timeout="${WAIT_SECONDS}s" >/dev/null 2>&1; then
     pass 'AIOStreams Deployment is Available'
 else

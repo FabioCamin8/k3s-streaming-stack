@@ -14,7 +14,7 @@ Checked against the current `main` branch and GHCR metadata on 2026-08-27:
 | Property | Verified contract |
 | --- | --- |
 | Image | `ghcr.io/viren070/aiostreams:latest` |
-| `latest` | Published by the upstream release workflow for a stable semver tag whose commit is upstream `main`; it is intentionally mutable. |
+| `latest` | Published by the upstream release workflow for a stable semver release when that release ref resolves to upstream `main`; it is intentionally mutable. On 2026-08-27, `latest` and `v2.33.2` shared the observed digest while upstream `main` was already ahead. |
 | Architectures | `linux/amd64` and `linux/arm64` image index |
 | Release observed | v2.33.2 |
 | Container port | 3000 |
@@ -22,11 +22,11 @@ Checked against the current `main` branch and GHCR metadata on 2026-08-27:
 | Durable data | SQLite at `/app/data/db.sqlite` from `DATABASE_URI=sqlite://./data/db.sqlite` |
 | Cache | Defaults under the data directory; no separate cache volume is needed initially |
 | Health | `GET /api/v1/health`, which queries the database before returning 200 |
-| Base URL | Required full HTTPS URL, used for generated addon/configuration URLs |
+| Base URL | Required valid URL, used for generated addon/configuration URLs; production ingress uses HTTPS |
 | Durable key | `SECRET_KEY`, exactly 64 hex characters; changing it makes stored encrypted configurations unreadable |
 | Native auth | `AIOSTREAMS_AUTH=user:password`, with `AIOSTREAMS_AUTH_REQUIRED=true` for `/stremio/configure` |
 | Machine paths | Public `/stremio/manifest.json` and `/stremio/stream`; configured machine URLs use `/stremio/<uuid>/<encrypted-password>/...` |
-| Proxy/IP | `TRUSTED_IPS` controls when forwarded client IP headers are accepted; the upstream Docker default is not used |
+| Proxy/IP | `TRUSTED_IPS` narrowly gates forwarded `requestIp` headers; the upstream Docker default is not used |
 | Startup | Database connection and migrations complete before the server listens |
 | Runtime user | No `runAsUser` is forced; the image identity is observed live before making that assumption |
 
@@ -85,14 +85,28 @@ after the apply/validation session and never commit it.
 Native authentication is the application boundary for this milestone. The
 operator credential is supplied through `AIOSTREAMS_AUTH`; the config page is
 gated by `AIOSTREAMS_AUTH_REQUIRED=true`, and the dashboard/API session is
-created through AIOStreams' own login endpoint. A blanket Traefik ForwardAuth
-is intentionally absent so Stremio machine paths remain usable.
+created through AIOStreams' own login endpoint. With auth required and no
+`CONFIG_ACCESS_KEY` environment value, the current release generates and
+persists its config-write key in the application settings store; an
+authenticated native session injects that key for authorized config writes.
+A blanket Traefik ForwardAuth is intentionally absent so Stremio machine paths
+remain usable.
 
 The public base manifest is useful for discovery and returns a configuration
 required response until a safe per-user configuration exists. A configured
 Stremio URL carries the upstream-generated user identity/password path; it is
-not the browser's admin session. Do not put provider or debrid credentials in
-this repository or in a smoke test.
+not the browser's admin session. On the current `v2.33.2` release, the
+smallest provider-free configuration accepted by the user API is:
+
+```json
+{"sortCriteria":{"global":[]},"formatter":{"id":"torrentio"},"presets":[]}
+```
+
+Create it with `POST /api/v1/user` using the native admin session and a
+separate configuration password. `GET /api/v1/user` requires Basic auth in
+the generated `uuid:password` form; an unauthenticated request returning 400
+is expected. Do not put provider or debrid credentials in this repository or
+in a smoke test.
 
 ## Persistence and recovery
 
