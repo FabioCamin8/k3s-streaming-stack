@@ -62,6 +62,24 @@ openssl rand -hex 32       # AIOSTREAMS_SECRET_KEY
 openssl rand -hex 24       # password material for AIOSTREAMS_AUTH
 ```
 
+Set `AIOSTREAMS_PUBLIC_HTTPS_PORT` to the operator's public TCP port. Use `443`
+for the standard URL or `8443` when the router preserves WAN 443 for another
+service. The public port is an external/NAT concern: Traefik still terminates
+TLS on its normal internal `websecure` entrypoint at 443, the Ingress hostname
+contains no port, and DNS records never contain a port.
+
+Rendering produces these URL forms:
+
+| Public mode | `BASE_URL` |
+| --- | --- |
+| WAN 443 -> Traefik 443 | `https://stream.example.com` |
+| WAN 8443 -> Traefik 443 | `https://stream.example.com:8443` |
+
+The DNS-01 certificate flow is independent of this choice. Cloudflare carries
+the DNS TXT challenge for `stream.example.com`; Let's Encrypt issues the host
+certificate; clients later use either public URL. No HTTP-01 challenge or WAN
+port 80 is required.
+
 Set `AIOSTREAMS_TRUSTED_IPS` to the exact source range observed between
 Traefik and the AIOStreams Pod. On the current single-node cluster the node
 PodCIDR is an operator-specific value and is kept only in the private file.
@@ -75,6 +93,12 @@ AIOSTREAMS_CONFIG_FILE=/secure/operator-secrets/aiostreams.env \
   ./k8s/aiostreams/render.sh /tmp/k3s-aiostreams-manifests
 kubectl kustomize /tmp/k3s-aiostreams-manifests
 kubectl apply -k /tmp/k3s-aiostreams-manifests
+```
+
+Run the static contract checks with:
+
+```sh
+./scripts/verify/aiostreams-render.sh
 ```
 
 The rendered directory contains the Secret and is secret material. Remove it

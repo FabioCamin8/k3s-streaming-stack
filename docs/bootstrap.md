@@ -68,7 +68,11 @@ later security/update controllers remain separate phases in [`plan.md`](plan.md)
 4. Verify the current AIOStreams contract in
    [`k8s/aiostreams/README.md`](../k8s/aiostreams/README.md), then copy its
    `operator.env.example` to a protected location and render outside Git.
-5. Apply the rendered AIOStreams bundle, run the workload verifier, and record
+5. Choose one direct public mode: WAN TCP/443 -> Traefik TCP/443, or WAN
+   TCP/8443 -> Traefik TCP/443. Set `AIOSTREAMS_PUBLIC_HTTPS_PORT` to the same
+   public port. Keep the DNS-only record hostname-only; do not require WAN 80
+   or change Traefik's internal 443 entrypoint.
+6. Apply the rendered AIOStreams bundle, run the workload verifier, and record
    the actual image digest and redacted lifecycle evidence in private operator
    notes and the PR.
 

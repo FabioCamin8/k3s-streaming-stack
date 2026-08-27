@@ -91,15 +91,60 @@ client-supplied forwarded headers did not create separate rate-limit buckets;
 it is not a claim that every application header-derived IP behavior is
 protected by `TRUSTED_IPS`.
 
-## DNS and external reachability limitation
+## Public exposure inventory and external reachability
 
-Cloudflare authoritative DNS-over-HTTPS currently returns one A record that is
-classified as RFC1918/private. An external AWS vantage point timed out with
-HTTP `000`, while the internal K3s route works. The production certificate,
-Traefik route, and application checks therefore prove the internally reachable
-HTTPS path only; Internet reachability is not currently verified.
+The continuation selected alternate direct HTTPS: public TCP/8443 is intended
+to map narrowly through the router/NAT to Traefik TCP/443. Public TCP/443 was
+left untouched because an existing external TLS service is already responsive
+there; it was not repointed or overwritten. The local gateway is UniFi and its
+own management surfaces include 443/8443, while the external 443 certificate
+does not match that gateway. No new reverse proxy was deployed. The inspected
+MediaFlow/proxy candidates were not verified as the front public edge, and no
+MediaFlow or unrelated exposure was changed.
 
-This PR does not change DNS, NAT, firewall, router, or origin-address state.
+Observed network classification is redacted: outbound IPv4 is publicly
+routable, IPv6 was unavailable, and an independent external vantage reached
+the observed public address on TCP/443 but not TCP/8443. This demonstrates an
+inbound path exists for the pre-existing 443 service and no CGNAT block was
+observed for that path; the router's exact WAN address was not recorded.
+
+No authenticated router change was available in this continuation. The
+remaining operator action is one TCP-only forward for WAN 8443 to the K3s
+node/Traefik TCP 443, retaining the existing 443 rule untouched and exposing
+no management, SSH, Kubernetes API, NodePort, UDP, or DMZ path. The Cloudflare
+application record was corrected through the existing scoped operator path to
+the observed publicly routable origin, remains DNS-only, and contains no port.
+No cert-manager credential change was made.
+
+The renderer/static contract was checked for both supported modes: 443 renders
+a portless BASE_URL and 8443 renders `:8443`; invalid port values fail closed.
+The protected operator file and rendered bundle were then updated to 8443. A
+server-side dry-run and a diff review confirmed that only the bootstrap Secret's
+BASE_URL changed. The Deployment was rolled out normally; the Namespace, PVC,
+Service, and Ingress identities were preserved. Internal HTTPS mapped the
+operator URL on 8443 to the existing Traefik 443 endpoint with normal
+certificate verification. Health, native admin session/authenticated configure,
+base manifest, provider-free configured manifest, and Pod-recreation persistence
+all passed. The updated verifier passed its 18 structural gates with the
+expected public port; the separate internal application smoke passed its
+focused endpoint and persistence checks.
+
+The external application gate therefore remains open:
+
+Cloudflare authoritative DNS and the independent AWS resolver now return one
+non-private A record matching the observed origin. From that AWS vantage point,
+the selected hostname's TCP/8443 connection is closed/filtered and HTTPS
+health returns HTTP `000`; TLS, health, and Stremio application checks are
+therefore BLOCKED at the missing NAT path. Public TCP/443 remains responsive
+as a pre-existing different service, but normal hostname certificate validation
+and AIOStreams health fail there. The production certificate, Traefik route,
+and application checks prove the internally reachable HTTPS path only; no
+external DNS/TCP/TLS/health/Stremio PASS is claimed.
+
+The targeted boundary check found TCP/22, 80, 6443, and 6444 closed/filtered
+from the same vantage point. This is limited evidence for the tested ports, not
+a claim of complete firewall hardening.
+
 The limitation remains an operator follow-up gate and must be resolved before
 claiming public Internet availability.
 

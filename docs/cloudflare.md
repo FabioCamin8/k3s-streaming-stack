@@ -7,9 +7,15 @@ that setting, the certificate, and an internal HTTPS route check do not prove
 public Internet reachability. Its hostname and address are operator data, not
 repository data.
 
+The public service port is separate from DNS and Kubernetes. The operator may
+use standard direct HTTPS (`WAN TCP/443 -> Traefik TCP/443`) or alternate direct
+HTTPS (`WAN TCP/8443 -> Traefik TCP/443`). The selected port belongs in
+AIOStreams `BASE_URL`, while the DNS record contains only the hostname. Traefik
+continues to use its internal `websecure` entrypoint on 443.
+
 ## DNS-01 certificate flow
 
-cert-manager will use ACME DNS-01 to prove control of the zone. This avoids requiring an HTTP challenge to reach the cluster and works whether an application hostname is DNS-only or proxied.
+cert-manager will use ACME DNS-01 to prove control of the zone. This avoids requiring an HTTP challenge to reach the cluster and works whether an application hostname is DNS-only or proxied. The DNS TXT challenge and the resulting certificate for `stream.example.com` are independent of whether clients later connect to port 443 or 8443. Do not add HTTP-01 or require WAN port 80 for the alternate public port.
 
 Create a dedicated Cloudflare API token using the [Cloudflare token workflow](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/). Scope it to the one deployment zone and grant only the permissions required by the [cert-manager Cloudflare DNS-01 integration](https://cert-manager.io/docs/configuration/acme/dns01/cloudflare/): zone read and DNS record edit. Do not use a global API key.
 
@@ -25,7 +31,7 @@ The certificate lifecycle is:
 
 ## Proxy decision
 
-The initial default is DNS-only while the stack is brought up. This makes the network path and redirect behavior observable and avoids sending streaming traffic through Cloudflare by assumption.
+The initial default is DNS-only while the stack is brought up. This makes the network path and redirect behavior observable and avoids sending streaming traffic through Cloudflare by assumption. Orange-cloud HTTP proxying is not part of this milestone.
 
 Cloudflare proxying is an explicit per-hostname decision. Before enabling it, verify the applicable Cloudflare product limits and terms, confirm that the application protocol is supported, and test authentication, forwarded client information, WebSocket behavior if required by the verified upstream contract, and Remux redirects.
 
@@ -38,18 +44,19 @@ If proxying is enabled:
 
 ## DNS records
 
-Create only the application records that are required, using deployment-specific values outside Git. The configured application record is a single DNS-only A record intended for the Traefik origin. Keep the public repository limited to example names and omit real addresses. A DNS record does not by itself expose a Kubernetes Service; Traefik ingress and any external firewall/NAT remain separate controls.
+Create only the application records that are required, using deployment-specific values outside Git. The configured application record is a single DNS-only A record intended for a publicly reachable Traefik origin. Keep the public repository limited to example names and omit real addresses. DNS contains no port: a public 8443 choice is expressed only by the client URL and the router/NAT rule. A DNS record does not by itself expose a Kubernetes Service; Traefik ingress and any external firewall/NAT remain separate controls.
 
 The record was created out of band with the scoped cert-manager operator token.
-Public DNS-over-HTTPS observed the record, but the authoritative answer
-currently classifies the origin as private and an external vantage point timed
-out. The internal route works; therefore certificate and HTTPS evidence are
-currently internal validation only, not proof of public Internet reachability.
+The private origin value was corrected through the existing scoped operator
+path to the observed public origin, and authoritative/public DNS now returns a
+non-private answer. The record remains DNS-only. The selected public 8443 path
+still requires the operator's router/NAT forward to Traefik TCP/443; an
+external vantage point therefore still cannot validate the application.
 A local resolver may also serve a cached negative answer for a short time, so
 DNS evidence and the HTTPS route check remain separate gates. The live internal
 route was validated with an ephemeral operator-side resolve mapping, without
 persisting that mapping or publishing its address. This repository does not
-change DNS, NAT, firewall, or router state.
+change NAT, firewall, or router state.
 
 ## Operational checks
 

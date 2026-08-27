@@ -6,6 +6,8 @@ KUBECTL=${KUBECTL:-kubectl}
 NAMESPACE=${NAMESPACE:-streaming}
 WAIT_SECONDS=${WAIT_SECONDS:-180}
 AIOSTREAMS_URL=${AIOSTREAMS_URL:-}
+AIOSTREAMS_EXPECTED_PUBLIC_HTTPS_PORT=${AIOSTREAMS_EXPECTED_PUBLIC_HTTPS_PORT:-443}
+AIOSTREAMS_EXPECTED_BASE_URL=${AIOSTREAMS_EXPECTED_BASE_URL:-}
 FAILURES=0
 
 pass() { printf 'PASS: %s\n' "$*"; }
@@ -33,9 +35,23 @@ json_value() {
 
 [[ $WAIT_SECONDS =~ ^[1-9][0-9]*$ ]] || fail 'WAIT_SECONDS must be positive'
 require_command awk
+require_command base64
 require_command grep
 require_command sleep
 require_command "$KUBECTL"
+
+if [[ ! $AIOSTREAMS_EXPECTED_PUBLIC_HTTPS_PORT =~ ^[0-9]+$ ]]; then
+    fail 'AIOSTREAMS_EXPECTED_PUBLIC_HTTPS_PORT must be a decimal TCP port'
+else
+    expected_port=$AIOSTREAMS_EXPECTED_PUBLIC_HTTPS_PORT
+    while [[ ${expected_port:0:1} == 0 && $expected_port != 0 ]]; do
+        expected_port=${expected_port:1}
+    done
+    if (( ${#expected_port} > 5 )) ||
+        (( 10#$expected_port < 1 || 10#$expected_port > 65535 )); then
+        fail 'AIOSTREAMS_EXPECTED_PUBLIC_HTTPS_PORT must be between 1 and 65535'
+    fi
+fi
 
 if wait_for_namespace; then
     pass "namespace $NAMESPACE exists"
@@ -114,12 +130,38 @@ for key in BASE_URL SECRET_KEY DATABASE_URI AIOSTREAMS_AUTH AIOSTREAMS_AUTH_REQU
     unset value
 done
 
+base_url_b64=$(json_value secret aiostreams-bootstrap '{.data.BASE_URL}')
+base_url=$(printf '%s' "$base_url_b64" | base64 -d 2>/dev/null || true)
+if [[ -z $base_url ]]; then
+    fail 'bootstrap Secret BASE_URL is empty or undecodable'
+elif [[ -n $AIOSTREAMS_EXPECTED_BASE_URL ]]; then
+    if [[ $base_url == "$AIOSTREAMS_EXPECTED_BASE_URL" ]]; then
+        pass 'BASE_URL matches the expected public URL'
+    else
+        fail 'BASE_URL does not match the expected public URL'
+    fi
+elif [[ ${expected_port:-invalid} == 443 && $base_url =~ ^https://[^/:]+$ ]]; then
+    pass 'BASE_URL is portless for public HTTPS 443'
+elif [[ ${expected_port:-invalid} != 443 &&
+    $base_url =~ ^https://[^/:]+:${expected_port}$ ]]; then
+    pass 'BASE_URL contains the selected non-standard public HTTPS port'
+else
+    fail 'BASE_URL does not match the expected public HTTPS port'
+fi
+
 ingress_class=$(json_value ingress aiostreams '{.spec.ingressClassName}')
 tls_secret=$(json_value ingress aiostreams '{.spec.tls[0].secretName}')
 if [[ $ingress_class == traefik && $tls_secret == aiostreams-tls ]]; then
     pass 'Ingress uses Traefik and the AIOStreams TLS Secret'
 else
     fail 'Ingress TLS/class shape is invalid'
+fi
+
+ingress_host=$(json_value ingress aiostreams '{.spec.rules[0].host}')
+if [[ -n $ingress_host && $ingress_host != *:* ]]; then
+    pass 'Ingress hostname contains no public port'
+else
+    fail 'Ingress hostname is empty or contains a port'
 fi
 
 if "$KUBECTL" -n "$NAMESPACE" wait \

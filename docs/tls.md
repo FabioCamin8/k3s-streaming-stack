@@ -21,6 +21,10 @@ dashboard remain outside scope.
 - Use individual host certificates, not a wildcard, until the actual
   application/admin hostname layout is known.
 - Keep the DNS record DNS-only for direct Traefik origin validation.
+- Keep certificate issuance independent from the public application port:
+  Cloudflare DNS-01 validates the hostname through a TXT record, while the
+  router may expose WAN 443 or WAN 8443 to Traefik's unchanged internal 443.
+  Do not add HTTP-01 or require WAN port 80 for the 8443 mode.
 
 ## Operator sequence
 

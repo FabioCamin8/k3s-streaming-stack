@@ -17,7 +17,7 @@ and migration/redirect behavior still require separate validation.
 In scope:
 
 - A single-node K3s cluster using the bundled containerd, Traefik v3, CoreDNS, and local-path storage.
-- AIOStreams with SQLite, persistent `/app/data`, native authentication, and public HTTPS ingress.
+- AIOStreams with SQLite, persistent `/app/data`, native authentication, and public HTTPS ingress with an operator-selected public port.
 - A documented future Remux workload with SQLite and persistent `/data`.
 - Cloudflare-managed DNS.
 - cert-manager with ACME DNS-01 and a narrowly scoped Cloudflare API token.
@@ -43,14 +43,33 @@ The Proxmox underlay uses MTU 9000 through the physical network, bridge, VirtIO 
 
 ```mermaid
 flowchart TD
-    Client[Client: Infuse, Swiftfin, browser, or Stremio] --> DNS[Cloudflare DNS<br/>optional HTTP proxy]
-    DNS --> Traefik[Bundled Traefik v3<br/>K3s ServiceLB]
+    Client[Client: Infuse, Swiftfin, browser, or Stremio] --> DNS[Cloudflare DNS<br/>hostname only]
+    DNS --> Edge[Operator edge<br/>WAN 443 or 8443 -> NAT]
+    Edge --> Traefik[Bundled Traefik v3<br/>K3s ServiceLB :443]
     Traefik --> AIO[AIOStreams]
     Traefik --> Remux[Remux]
     Remux --> AIO
     Remux -->|HTTP redirect where supported| CDN[Upstream or debrid CDN]
     Client -.->|Direct playback after redirect| CDN
 ```
+
+### Public HTTPS exposure
+
+The public port is an operator/network choice and is kept separate from the
+Kubernetes contract. Configure `AIOSTREAMS_PUBLIC_HTTPS_PORT` as `443` for the
+standard mode or `8443` for an alternate direct port. Both modes map the WAN
+port to Traefik's unchanged internal HTTPS entrypoint at 443; the Ingress and
+certificate host remain `stream.example.com` and DNS contains no port.
+
+| Mode | Public URL | WAN -> NAT target | `BASE_URL` |
+| --- | --- | --- | --- |
+| Standard direct HTTPS | `https://stream.example.com` | TCP/443 -> Traefik TCP/443 | `https://stream.example.com` |
+| Alternate direct HTTPS | `https://stream.example.com:8443` | TCP/8443 -> Traefik TCP/443 | `https://stream.example.com:8443` |
+
+443 is most compatible with client networks. 8443 avoids consuming WAN 443 for
+this workload but can be blocked on unusually restrictive networks. Use only
+one public port for AIOStreams. The router rule is narrowly TCP-only; do not
+expose SSH, the Kubernetes API, NodePorts, or the whole node.
 
 Remux should eventually expose Jellyfin-compatible APIs, catalog, and search to
 a compatible client. Where it supports an HTTP redirect to an upstream/debrid
@@ -89,13 +108,16 @@ certificates through Let's Encrypt DNS-01 using a Cloudflare API token limited
 to DNS edit and zone read for the one relevant zone. The real token is supplied
 out of band and never stored in Git. The AIOStreams hostname is configured
 DNS-only to select direct-origin semantics; DNS-only does not itself prove that
-the origin is reachable from the public Internet. The current evidence
-validates the HTTPS route from the operator network, while external reachability
-remains a separate unresolved gate; see the validation report.
+the origin is reachable from the public Internet. The DNS TXT challenge and
+certificate issuance are independent of whether clients use public 443 or
+8443, and DNS records never contain a port. The current evidence validates the
+HTTPS route from the operator network, while external reachability remains a
+separate unresolved gate; see the validation report.
 
 The initial operational default is DNS-only during bring-up. This keeps the client-to-edge behavior easy to observe and avoids making Cloudflare the assumed streaming proxy. HTTP proxying can be enabled deliberately per hostname after confirming the workload behavior, Cloudflare terms and limits, and Traefik trusted-proxy configuration. If proxying is enabled, Traefik must trust `X-Forwarded-*` headers only from Cloudflare's current published IP ranges, never from arbitrary clients.
 
-See [`docs/cloudflare.md`](docs/cloudflare.md) for the DNS-01, proxy, and certificate lifecycle.
+See [`docs/cloudflare.md`](docs/cloudflare.md) for the DNS-01, proxy, public
+port, and certificate lifecycle.
 
 ## 8. Security philosophy
 
@@ -128,9 +150,9 @@ disabled. See [`docs/upgrade-strategy.md`](docs/upgrade-strategy.md),
 ## 10. Roadmap
 
 See the living roadmap in [`docs/plan.md`](docs/plan.md). Phases 0–2 are
-validated; Phase 3 is the current AIOStreams deployment; Remux, selective
-Authelia, bounded application updates, optional DNS automation, and operational
-polish remain sequenced future phases.
+validated; Phase 3 is the current AIOStreams deployment; edge consolidation,
+Remux, selective Authelia, bounded application updates, optional DNS
+automation, and operational polish remain sequenced future phases.
 
 ## 11. Current project status
 

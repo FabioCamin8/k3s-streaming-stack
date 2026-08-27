@@ -48,6 +48,7 @@ base64_value() {
 }
 
 AIOSTREAMS_HOST=$(read_config AIOSTREAMS_HOST)
+AIOSTREAMS_PUBLIC_HTTPS_PORT=$(read_config AIOSTREAMS_PUBLIC_HTTPS_PORT)
 AIOSTREAMS_SECRET_KEY=$(read_config AIOSTREAMS_SECRET_KEY)
 AIOSTREAMS_AUTH=$(read_config AIOSTREAMS_AUTH)
 AIOSTREAMS_TRUSTED_IPS=$(read_config AIOSTREAMS_TRUSTED_IPS)
@@ -55,6 +56,16 @@ AIOSTREAMS_TRUSTED_IPS=$(read_config AIOSTREAMS_TRUSTED_IPS)
 hostname_re='^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$'
 [[ $AIOSTREAMS_HOST =~ $hostname_re ]] ||
     die 'AIOSTREAMS_HOST must be a lowercase hostname'
+[[ $AIOSTREAMS_PUBLIC_HTTPS_PORT =~ ^[0-9]+$ ]] ||
+    die 'AIOSTREAMS_PUBLIC_HTTPS_PORT must be a decimal TCP port'
+
+public_port=$AIOSTREAMS_PUBLIC_HTTPS_PORT
+while [[ ${public_port:0:1} == 0 && $public_port != 0 ]]; do
+    public_port=${public_port:1}
+done
+(( ${#public_port} <= 5 )) || die 'AIOSTREAMS_PUBLIC_HTTPS_PORT must be between 1 and 65535'
+(( 10#$public_port >= 1 && 10#$public_port <= 65535 )) ||
+    die 'AIOSTREAMS_PUBLIC_HTTPS_PORT must be between 1 and 65535'
 [[ $AIOSTREAMS_SECRET_KEY =~ ^[A-Fa-f0-9]{64}$ ]] ||
     die 'AIOSTREAMS_SECRET_KEY must be a 64-character hex string'
 [[ $AIOSTREAMS_AUTH =~ ^[^,:]+:[^,]+(,[^,:]+:[^,]+)*$ ]] ||
@@ -62,6 +73,7 @@ hostname_re='^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0
 [[ $AIOSTREAMS_TRUSTED_IPS =~ ^[0-9./,]+$ ]] ||
     die 'AIOSTREAMS_TRUSTED_IPS must contain only IPv4 addresses or CIDRs'
 [[ $AIOSTREAMS_HOST != *'__'* && $AIOSTREAMS_SECRET_KEY != *'__'* &&
+    $AIOSTREAMS_PUBLIC_HTTPS_PORT != *'__'* &&
     $AIOSTREAMS_AUTH != *'__'* && $AIOSTREAMS_TRUSTED_IPS != *'__'* ]] ||
     die 'operator config still contains a placeholder'
 
@@ -74,7 +86,13 @@ for resource in namespace.yaml bootstrap.yaml pvc.yaml service.yaml deployment.y
     cp "$SCRIPT_DIR/$resource" "$OUTPUT_DIR/$resource"
 done
 
-export _AIOSTREAMS_BASE_URL_B64=$(base64_value "https://$AIOSTREAMS_HOST")
+if [[ $public_port == 443 ]]; then
+    AIOSTREAMS_BASE_URL=https://$AIOSTREAMS_HOST
+else
+    AIOSTREAMS_BASE_URL=https://$AIOSTREAMS_HOST:$public_port
+fi
+
+export _AIOSTREAMS_BASE_URL_B64=$(base64_value "$AIOSTREAMS_BASE_URL")
 export _AIOSTREAMS_SECRET_KEY_B64=$(base64_value "$AIOSTREAMS_SECRET_KEY")
 export _AIOSTREAMS_AUTH_B64=$(base64_value "$AIOSTREAMS_AUTH")
 export _AIOSTREAMS_TRUSTED_IPS_B64=$(base64_value "$AIOSTREAMS_TRUSTED_IPS")

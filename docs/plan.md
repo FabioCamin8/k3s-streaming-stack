@@ -29,10 +29,24 @@ recovery. `external-dns` remains optional future work.
 One `latest` replica with `imagePullPolicy: Always`, SQLite, `/app/data`
 local-path PVC, public Traefik HTTPS ingress, native auth, DB-backed health,
 trusted-proxy validation, Pod recreation, controlled reboot, and a real
-Stremio manifest check. Direct provider-backed playback is only claimed when
-its credentials and test are available.
+Stremio manifest check. Its public HTTPS port is an explicit operator input:
+443 is the standard/template default and 8443 is the supported alternate,
+both mapping to Traefik's internal 443. The direct-origin mode remains
+DNS-only; DNS-01 does not depend on the application public port. Independent
+public reachability is a separate gate and remains unresolved when the origin
+or NAT path is not publicly reachable. Direct provider-backed playback is only
+claimed when its credentials and test are available.
 
 ## Future milestones
+
+### Phase 3.1 - edge / reverse-proxy consolidation — future, not implemented
+
+Allow several self-hosted services to share WAN 443 by hostname while
+preserving client protocol compatibility, avoiding unnecessary extra public
+ports, and retaining a simple TLS lifecycle. Inspect existing services such as
+MediaFlow and choose deliberately between TLS termination, SNI passthrough, a
+K3s Traefik consolidation point, or a minimal existing external edge. Do not
+introduce a new reverse-proxy product in the AIOStreams milestone.
 
 ### Phase 4 - Remux — planned
 

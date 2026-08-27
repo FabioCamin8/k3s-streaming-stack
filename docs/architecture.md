@@ -45,13 +45,33 @@ Multi-node overlay transport remains unvalidated.
 ## Request and data paths
 
 1. A client resolves an application hostname through Cloudflare DNS. An answer and a DNS-only record do not by themselves prove Internet reachability.
-2. If the origin is reachable, DNS-only traffic goes directly to the Traefik origin; if HTTP proxying is deliberately enabled, traffic first enters through Cloudflare's edge, according to the choice recorded in [`docs/cloudflare.md`](cloudflare.md).
+2. If the origin is reachable, DNS-only traffic goes directly to the operator-selected public port. A router/NAT rule maps that port to Traefik's internal HTTPS port 443; if HTTP proxying is deliberately enabled, traffic first enters through Cloudflare's edge, according to the choice recorded in [`docs/cloudflare.md`](cloudflare.md).
 3. Traefik receives HTTP(S) traffic through the reachable K3s networking path and routes by hostname to the selected Kubernetes Service.
 4. Traefik routes the public AIOStreams HTTPS host to its ClusterIP Service.
 5. AIOStreams handles stream aggregation and keeps its application data and default disk caches under persistent `/app/data`.
 6. Remux is a future client-facing layer. It may call AIOStreams and, where supported, return an HTTP redirect to an upstream/debrid URL so video bytes bypass the K3s host.
 
 The persistence paths and workload relationships are architectural decisions from the project brief. They must still be checked against the current upstream images before a manifest encodes them.
+
+## External HTTPS exposure contract
+
+The operator-facing public port is separate from the Kubernetes-facing Traefik
+entrypoint. `AIOSTREAMS_PUBLIC_HTTPS_PORT` is part of the AIOStreams
+configuration and therefore controls the public `BASE_URL`; it does not change
+the Service, Ingress hostname, certificate hostname, or Traefik `websecure`
+listener.
+
+| Mode | Public URL | WAN listener | NAT target | Kubernetes contract |
+| --- | --- | --- | --- | --- |
+| Standard direct HTTPS | `https://stream.example.com` | TCP/443 | Traefik TCP/443 | Ingress host `stream.example.com`, Traefik `websecure` 443 |
+| Alternate direct HTTPS | `https://stream.example.com:8443` | TCP/8443 | Traefik TCP/443 | Ingress host `stream.example.com`, Traefik `websecure` 443 |
+
+Port 443 has the broadest client and network compatibility. Port 8443 can
+preserve WAN 443 for an existing service, but unusually restrictive client
+networks may block it. DNS records contain no port, and DNS-01 certificate
+issuance works identically in both modes. The public NAT/firewall rule is an
+operator concern; the repository does not enable UPnP, expose management ports,
+or create a broad node firewall rule.
 
 ## Kubernetes ownership
 
@@ -78,6 +98,29 @@ security, and configuration assumptions have a primary-source basis.
 - The Cloudflare API token is a deployment secret scoped to one zone and DNS operations only.
 - Local-path volumes are node-local state and must be backed up independently.
 - A redirect target is external and untrusted input. Remux behavior must be tested for safe redirect handling before production use.
+
+## Future edge consolidation
+
+This is a roadmap objective only and is not deployed by the AIOStreams
+milestone. A future edge could accept one public TCP/443 listener and route by
+hostname, for example:
+
+```text
+Internet
+   |
+TCP/443
+   |
+front proxy / gateway
+   +-- aio.example.com ------> Traefik/AIOStreams
+   +-- media.example.com ----> MediaFlow or another service
+   +-- remux.example.com ----> Traefik/Remux
+```
+
+The later design review must choose between TLS termination at the front,
+TLS passthrough/SNI routing, K3s Traefik as the consolidation point, or an
+existing external edge. This milestone introduces no HAProxy, nginx, Caddy,
+additional Traefik, or Envoy component and does not imply that any front proxy
+is already deployed.
 
 ## Failure and recovery invariants
 
