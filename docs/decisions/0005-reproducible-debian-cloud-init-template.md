@@ -19,10 +19,13 @@ vendor-data snippet, and convert the result to the reusable `debian13-cloud`
 template. Create `k3s01` as a full clone with its project-specific CPU,
 memory, disk, network, user, SSH key, DHCP, and start-on-boot profile.
 
-Keep Proxmox-generated Cloud-Init data for instance-specific hostname, user,
-SSH key, DHCP networking, and DNS. Keep vendor-data limited to generic Debian
-baseline packages, SSH hardening, QEMU guest-agent setup, and generic OS
-initialization.
+Keep the template's Cloud-Init user, password, and SSH key as the default
+credential baseline for full clones. The clone workflow may override the user
+and may override the SSH key only when explicitly requested. Keep
+Proxmox-generated Cloud-Init data for instance-specific hostname, DHCP
+networking, and DNS. Keep vendor-data limited to generic Debian baseline
+packages, SSH hardening, QEMU guest-agent setup, and generic OS initialization.
+SSH password authentication remains disabled by vendor-data.
 
 The VM underlay MTU is explicitly 9000. K3s CNI/Flannel MTU is deliberately
 left undiscovered and unconfigured until the later K3s milestone.

@@ -26,10 +26,13 @@ official Debian 13 genericcloud image
 
 The template is generic Debian only. It does not contain K3s, Docker, Podman,
 Kubernetes packages, AIOStreams, Remux, cert-manager, or application
-configuration. Proxmox-generated Cloud-Init supplies the per-instance
-hostname, user, SSH key, DHCP networking, and DNS. Project vendor-data supplies
-the small OS package baseline, SSH hardening, QEMU guest-agent setup, and
-generic OS initialization.
+configuration. The template's Cloud-Init configuration supplies the default
+user, password, and SSH key; the clone workflow can override the user and can
+override the SSH key only when explicitly requested. Proxmox-generated
+Cloud-Init still supplies the per-instance hostname, DHCP networking, and DNS.
+Project vendor-data supplies the small OS package baseline, SSH hardening,
+QEMU guest-agent setup, and generic OS initialization. SSH password
+authentication remains disabled by vendor-data.
 
 The network underlay is MTU 9000 end to end: physical network, Proxmox
 physical NIC, `vmbr`, VirtIO NIC, and Debian guest. The VM NIC declares MTU

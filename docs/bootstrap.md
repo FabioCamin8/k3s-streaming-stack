@@ -9,7 +9,8 @@ operator-run step; streaming applications remain later milestones.
 
 - A Proxmox VE host with one image-capable storage and one snippets-capable storage.
 - A local copy of the repository on that Proxmox host.
-- An operator SSH public-key file supplied out of band.
+- An operator SSH public-key file supplied out of band only when overriding the
+  template's inherited key.
 - A DHCP reservation and working guest DNS.
 - A private operator workstation with Git and, later, `kubectl`/`helm` if needed by the selected installation path.
 
@@ -22,9 +23,14 @@ operator-run step; streaming applications remain later milestones.
    with explicit image and snippet storage IDs. The builder verifies the
    dated Debian image checksum, configures the generic `debian13-cloud`
    template, and refuses collisions.
-3. Run the clone builder with an explicit `SSH_PUBLIC_KEY_FILE`. It creates a
-   full `k3s01` clone, applies `ip=dhcp`, declares the VM NIC MTU as 9000, and
-   starts the VM unless `--no-start` is selected.
+3. Run the clone builder with the selected image storage. It creates a full
+   `k3s01` clone, applies `ip=dhcp`, declares the VM NIC MTU as 9000, and starts
+   the VM unless `--no-start` is selected. The template's Cloud-Init user,
+   password, and SSH key are inherited by default. Supply
+   `--ssh-public-key-file <path>` only to intentionally override the SSH key;
+   the spawn script never reads or sets the password. The vendor-data policy
+   keeps SSH password authentication disabled, so that password is for local
+   console, sudo, and recovery use.
 4. From the guest, run `cloud-init status --wait` before considering it ready.
 5. Copy and run `scripts/verify/debian-node.sh`. Investigate any failure using
    `cloud-init status --long`, `/var/log/cloud-init.log`, and
