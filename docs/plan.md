@@ -32,10 +32,11 @@ trusted-proxy validation, Pod recreation, controlled reboot, and a real
 Stremio manifest check. Its public HTTPS port is an explicit operator input:
 443 is the standard/template default and 8443 is the supported alternate,
 both mapping to Traefik's internal 443. The direct-origin mode remains
-DNS-only; DNS-01 does not depend on the application public port. Independent
-public reachability is a separate gate and remains unresolved when the origin
-or NAT path is not publicly reachable. Direct provider-backed playback is only
-claimed when its credentials and test are available.
+DNS-only; DNS-01 does not depend on the application public port. The selected
+live 8443 path is externally validated through the operator-supplied NAT rule;
+other deployments must still prove their own public reachability. Direct
+provider-backed playback is only claimed when its credentials and test are
+available.
 
 ## Future milestones
 

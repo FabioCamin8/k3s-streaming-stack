@@ -110,9 +110,10 @@ out of band and never stored in Git. The AIOStreams hostname is configured
 DNS-only to select direct-origin semantics; DNS-only does not itself prove that
 the origin is reachable from the public Internet. The DNS TXT challenge and
 certificate issuance are independent of whether clients use public 443 or
-8443, and DNS records never contain a port. The current evidence validates the
-HTTPS route from the operator network, while external reachability remains a
-separate unresolved gate; see the validation report.
+8443, and DNS records never contain a port. The selected live 8443 path is
+validated from an independent external vantage after the operator supplied the
+TCP 8443 -> Traefik 443 NAT rule; other deployments retain a separate external
+reachability gate. See the validation report.
 
 The initial operational default is DNS-only during bring-up. This keeps the client-to-edge behavior easy to observe and avoids making Cloudflare the assumed streaming proxy. HTTP proxying can be enabled deliberately per hostname after confirming the workload behavior, Cloudflare terms and limits, and Traefik trusted-proxy configuration. If proxying is enabled, Traefik must trust `X-Forwarded-*` headers only from Cloudflare's current published IP ranges, never from arbitrary clients.
 

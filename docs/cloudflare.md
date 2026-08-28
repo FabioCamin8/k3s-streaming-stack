@@ -3,9 +3,10 @@
 Cloudflare is the DNS provider for the deployment. It is not assumed to be the
 video proxy, application authentication layer, or secret store. The current
 AIOStreams record is configured DNS-only to select direct-origin semantics;
-that setting, the certificate, and an internal HTTPS route check do not prove
-public Internet reachability. Its hostname and address are operator data, not
-repository data.
+that setting and the certificate do not by themselves prove public Internet
+reachability for every deployment. The selected live route was externally
+validated after the operator supplied its NAT rule. Hostname and address are
+operator data, not repository data.
 
 The public service port is separate from DNS and Kubernetes. The operator may
 use standard direct HTTPS (`WAN TCP/443 -> Traefik TCP/443`) or alternate direct
@@ -49,14 +50,10 @@ Create only the application records that are required, using deployment-specific
 The record was created out of band with the scoped cert-manager operator token.
 The private origin value was corrected through the existing scoped operator
 path to the observed public origin, and authoritative/public DNS now returns a
-non-private answer. The record remains DNS-only. The selected public 8443 path
-still requires the operator's router/NAT forward to Traefik TCP/443; an
-external vantage point therefore still cannot validate the application.
-A local resolver may also serve a cached negative answer for a short time, so
-DNS evidence and the HTTPS route check remain separate gates. The live internal
-route was validated with an ephemeral operator-side resolve mapping, without
-persisting that mapping or publishing its address. This repository does not
-change NAT, firewall, or router state.
+non-private answer. The record remains DNS-only. For the selected deployment,
+the operator supplied a TCP-only WAN 8443 -> Traefik TCP/443 forward, and an
+independent external vantage then validated DNS, TCP, TLS, and application
+responses. This repository does not change NAT, firewall, or router state.
 
 ## Operational checks
 

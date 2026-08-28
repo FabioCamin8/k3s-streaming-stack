@@ -1,6 +1,6 @@
 # AIOStreams validation evidence
 
-Date: 2026-08-27
+Date: 2026-08-28
 
 This is a redacted operator report. It intentionally omits the deployment
 hostname, node and origin addresses, credentials, cookies, kubeconfig data, and
@@ -102,19 +102,36 @@ does not match that gateway. No new reverse proxy was deployed. The inspected
 MediaFlow/proxy candidates were not verified as the front public edge, and no
 MediaFlow or unrelated exposure was changed.
 
-Observed network classification is redacted: outbound IPv4 is publicly
-routable, IPv6 was unavailable, and an independent external vantage reached
-the observed public address on TCP/443 but not TCP/8443. This demonstrates an
-inbound path exists for the pre-existing 443 service and no CGNAT block was
-observed for that path; the router's exact WAN address was not recorded.
+The previous independent external check reached the pre-existing TCP/443
+service but found TCP/8443 closed/filtered. On 2026-08-28 the operator supplied
+the required TCP-only NAT rule: WAN TCP/8443 -> K3s node/Traefik TCP/443. The
+existing WAN/443 service was left untouched; no management, SSH, Kubernetes
+API, NodePort, UDP, or DMZ path was added. No cert-manager credential change
+was made.
 
-No authenticated router change was available in this continuation. The
-remaining operator action is one TCP-only forward for WAN 8443 to the K3s
-node/Traefik TCP 443, retaining the existing 443 rule untouched and exposing
-no management, SSH, Kubernetes API, NodePort, UDP, or DMZ path. The Cloudflare
-application record was corrected through the existing scoped operator path to
-the observed publicly routable origin, remains DNS-only, and contains no port.
-No cert-manager credential change was made.
+From the same independent AWS vantage after that operator action, DNS returned
+one public A record, TCP/8443 connected, and the following complete-path gates
+passed:
+
+| External check | Result |
+| --- | ---: |
+| DNS resolution | PASS, public A answer |
+| TCP/8443 | PASS |
+| TLS certificate and SNI hostname verification | PASS |
+| `GET /api/v1/health` | 200, valid JSON |
+| `GET /stremio/manifest.json` | 200, valid Stremio manifest |
+| anonymous `GET /stremio/configure` | 302 to native login |
+| native login, session lookup, configure page | 200 / 200 / 200 |
+| provider-free configured manifest | 200, `configurationRequired=false` |
+
+The Cloudflare application record remains DNS-only and contains no port. The
+public URL used by the live configuration is represented here generically as
+`https://stream.example.com:8443`; the corresponding running `BASE_URL`
+includes `:8443`. The generated Stremio machine URL also uses the public 8443
+endpoint and its manifest was fetched without an administrator browser
+session. The operator-only configuration was reconciled to include
+`AIOSTREAMS_PUBLIC_HTTPS_PORT=8443`; the running Secret already contained the
+same value, so no workload rollout was required during this resume.
 
 The renderer/static contract was checked for both supported modes: 443 renders
 a portless BASE_URL and 8443 renders `:8443`; invalid port values fail closed.
@@ -129,24 +146,21 @@ all passed. The updated verifier passed its 18 structural gates with the
 expected public port; the separate internal application smoke passed its
 focused endpoint and persistence checks.
 
-The external application gate therefore remains open:
-
-Cloudflare authoritative DNS and the independent AWS resolver now return one
-non-private A record matching the observed origin. From that AWS vantage point,
-the selected hostname's TCP/8443 connection is closed/filtered and HTTPS
-health returns HTTP `000`; TLS, health, and Stremio application checks are
-therefore BLOCKED at the missing NAT path. Public TCP/443 remains responsive
-as a pre-existing different service, but normal hostname certificate validation
-and AIOStreams health fail there. The production certificate, Traefik route,
-and application checks prove the internally reachable HTTPS path only; no
-external DNS/TCP/TLS/health/Stremio PASS is claimed.
+The resumed external application gate is PASS for the selected 8443 path.
+Public TCP/443 remains a pre-existing different service and was not required.
+The production certificate, Traefik route, and application checks are now
+proven through the real Internet path rather than an internal resolve mapping.
 
 The targeted boundary check found TCP/22, 80, 6443, and 6444 closed/filtered
 from the same vantage point. This is limited evidence for the tested ports, not
 a claim of complete firewall hardening.
 
-The limitation remains an operator follow-up gate and must be resolved before
-claiming public Internet availability.
+Trusted-proxy behavior was also repeated through the external path: three
+different reserved `X-Forwarded-For` values yielded one shared rate-limit
+bucket (`4 -> 3 -> 2`). This confirms the external client cannot create
+independent `requestIp` buckets by supplying arbitrary forwarded values; it is
+bounded evidence and not a claim that every application header-derived IP
+behavior is protected by `TRUSTED_IPS`.
 
 ## Explicit gaps
 
