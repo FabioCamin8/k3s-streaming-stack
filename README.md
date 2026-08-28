@@ -6,38 +6,46 @@ A small, reproducible K3s-based streaming stack using bundled Traefik, AIOStream
 
 ## 1. Purpose
 
-This repository documents and incrementally implements a focused streaming stack on a Debian 13 VM running under Proxmox VE. It is intended to be understandable, reproducible, and safe to update through reviewable GitHub pull requests.
+This repository documents and incrementally implements a focused streaming stack on a Debian 13 VM running under Proxmox VE. It is intended to be understandable, reproducible, self-healing within a single node, and low-maintenance without unnecessary control planes.
 
-The first release is an architecture and operations baseline. It deliberately does not claim to be a ready-to-run deployment until the current upstream contracts for AIOStreams and Remux have been verified and encoded in Kubernetes manifests.
+The current milestone implements and validates the AIOStreams workload on the
+existing K3s platform. Remux remains future work because its upstream contract
+and migration/redirect behavior still require separate validation.
 
 ## 2. Scope
 
 In scope:
 
 - A single-node K3s cluster using the bundled containerd, Traefik v3, CoreDNS, and local-path storage.
-- AIOStreams with SQLite and persistent `/app/data`.
-- Remux with SQLite and persistent `/data`.
+- AIOStreams with SQLite, persistent `/app/data`, native authentication, and public HTTPS ingress with an operator-selected public port.
+- A documented future Remux workload with SQLite and persistent `/data`.
 - Cloudflare-managed DNS.
 - cert-manager with ACME DNS-01 and a narrowly scoped Cloudflare API token.
-- Renovate pull requests for Kubernetes image references under `k8s/`.
+- Renovate awareness for Kubernetes and platform image references under `k8s/`.
 
 Explicitly out of scope for v0.1:
 
 - A multi-node cluster or high availability.
 - Docker, Podman, Longhorn, Ceph, NFS, Redis, or PostgreSQL.
-- Argo CD, Flux, Prometheus, Grafana, or blind runtime image updates.
+- Argo CD, Flux, Prometheus, Grafana, or unnecessary dashboards/control planes.
+- Remux, Authelia, Keel, external-dns, and any automatic application updater in this milestone.
 - Committing real domains, addresses, credentials, kubeconfig files, or private keys.
 
 ## 3. Architecture
 
-The target is a Debian 13 VM, not an LXC container. The current bootstrap milestone builds that VM from a verified Debian Cloud-Init template; it does not install K3s yet. When the later Kubernetes milestone begins, K3s will own the node and use its bundled containerd. Bundled Traefik will be the only ingress controller. AIOStreams and Remux are separate one-replica workloads with local persistent data; their manifests are intentionally deferred until upstream image and configuration contracts are validated.
+The target is a Debian 13 VM, not an LXC container. The validated platform
+uses one K3s server with bundled containerd, Traefik, CoreDNS, ServiceLB,
+local-path storage, metrics-server, and cert-manager. AIOStreams is a separate
+one-replica workload with local persistent data; Remux remains future work.
+Traefik is the only ingress controller.
 
 The Proxmox underlay uses MTU 9000 through the physical network, bridge, VirtIO NIC, and Debian guest. The VM provisioning path declares the NIC MTU explicitly. The future K3s CNI/Flannel overlay MTU is intentionally not pinned here; it will be measured and validated after K3s bootstrap.
 
 ```mermaid
 flowchart TD
-    Client[Client: Infuse, Swiftfin, browser, or Stremio] --> DNS[Cloudflare DNS<br/>optional HTTP proxy]
-    DNS --> Traefik[Bundled Traefik v3<br/>K3s ServiceLB]
+    Client[Client: Infuse, Swiftfin, browser, or Stremio] --> DNS[Cloudflare DNS<br/>hostname only]
+    DNS --> Edge[Operator edge<br/>WAN 443 or 8443 -> NAT]
+    Edge --> Traefik[Bundled Traefik v3<br/>K3s ServiceLB :443]
     Traefik --> AIO[AIOStreams]
     Traefik --> Remux[Remux]
     Remux --> AIO
@@ -45,7 +53,31 @@ flowchart TD
     Client -.->|Direct playback after redirect| CDN
 ```
 
-Remux should expose Jellyfin-compatible APIs, catalog, and search to a compatible client. Where Remux supports an HTTP redirect to the upstream/debrid URL, the client fetches video directly from that upstream endpoint; video bytes should not traverse the K3s host. AIOStreams remains directly reachable for administration and as an emergency direct AIOStreams/Stremio fallback.
+### Public HTTPS exposure
+
+The public port is an operator/network choice and is kept separate from the
+Kubernetes contract. Configure `AIOSTREAMS_PUBLIC_HTTPS_PORT` as `443` for the
+standard mode or `8443` for an alternate direct port. Both modes map the WAN
+port to Traefik's unchanged internal HTTPS entrypoint at 443; the Ingress and
+certificate host remain `stream.example.com` and DNS contains no port.
+
+| Mode | Public URL | WAN -> NAT target | `BASE_URL` |
+| --- | --- | --- | --- |
+| Standard direct HTTPS | `https://stream.example.com` | TCP/443 -> Traefik TCP/443 | `https://stream.example.com` |
+| Alternate direct HTTPS | `https://stream.example.com:8443` | TCP/8443 -> Traefik TCP/443 | `https://stream.example.com:8443` |
+
+443 is most compatible with client networks. 8443 avoids consuming WAN 443 for
+this workload but can be blocked on unusually restrictive networks. Use only
+one public port for AIOStreams. The router rule is narrowly TCP-only; do not
+expose SSH, the Kubernetes API, NodePorts, or the whole node.
+
+Remux should eventually expose Jellyfin-compatible APIs, catalog, and search to
+a compatible client. Where it supports an HTTP redirect to an upstream/debrid
+URL, the client should fetch video directly so bytes bypass the K3s host.
+AIOStreams remains publicly reachable for independent configuration and as a
+direct Stremio fallback until Remux is validated. If AIOStreams later becomes
+internal-only, Remux must never redirect clients to a `*.svc.cluster.local` or
+other client-unreachable URL.
 
 ## 4. Why K3s
 
@@ -63,7 +95,7 @@ See [`docs/proxmox-vm.md`](docs/proxmox-vm.md) and [ADR-0001](docs/decisions/000
 
 ### AIOStreams
 
-[AIOStreams](https://github.com/Viren070/AIOStreams) is the primary stream-aggregation backend. The planned first deployment is one replica, SQLite, persistent `/app/data`, and native authentication/configuration protection. No Redis or PostgreSQL dependency is assumed.
+[AIOStreams](https://github.com/Viren070/AIOStreams) is the primary stream-aggregation backend. This milestone deploys one replica, SQLite, persistent `/app/data`, native authentication/configuration protection, and public HTTPS ingress. It deliberately follows the upstream stable `latest` image with `imagePullPolicy: Always`; see [`k8s/aiostreams/README.md`](k8s/aiostreams/README.md). No Redis or PostgreSQL dependency is assumed.
 
 ### Remux
 
@@ -71,11 +103,22 @@ See [`docs/proxmox-vm.md`](docs/proxmox-vm.md) and [ADR-0001](docs/decisions/000
 
 ## 7. Cloudflare and TLS
 
-Cloudflare is the DNS authority. cert-manager will obtain certificates through Let's Encrypt DNS-01 using a Cloudflare API token limited to DNS edit and zone read for the one relevant zone. The real token is supplied out of band and never stored in Git.
+Cloudflare is the DNS authority. The validated cert-manager platform obtains
+certificates through Let's Encrypt DNS-01 using a Cloudflare API token limited
+to DNS edit and zone read for the one relevant zone. The real token is supplied
+out of band and never stored in Git. The AIOStreams hostname is configured
+DNS-only to select direct-origin semantics; DNS-only does not itself prove that
+the origin is reachable from the public Internet. The DNS TXT challenge and
+certificate issuance are independent of whether clients use public 443 or
+8443, and DNS records never contain a port. The selected live 8443 path is
+validated from an independent external vantage after the operator supplied the
+TCP 8443 -> Traefik 443 NAT rule; other deployments retain a separate external
+reachability gate. See the validation report.
 
 The initial operational default is DNS-only during bring-up. This keeps the client-to-edge behavior easy to observe and avoids making Cloudflare the assumed streaming proxy. HTTP proxying can be enabled deliberately per hostname after confirming the workload behavior, Cloudflare terms and limits, and Traefik trusted-proxy configuration. If proxying is enabled, Traefik must trust `X-Forwarded-*` headers only from Cloudflare's current published IP ranges, never from arbitrary clients.
 
-See [`docs/cloudflare.md`](docs/cloudflare.md) for the DNS-01, proxy, and certificate lifecycle.
+See [`docs/cloudflare.md`](docs/cloudflare.md) for the DNS-01, proxy, public
+port, and certificate lifecycle.
 
 ## 8. Security philosophy
 
@@ -84,36 +127,42 @@ See [`docs/cloudflare.md`](docs/cloudflare.md) for the DNS-01, proxy, and certif
 - Credentials are scoped to the smallest zone and permission set needed.
 - Ingress is explicit; an application is not exposed merely because its Service exists.
 - Storage is persistent but local to the VM. A single-node local-path volume is not a backup.
-- Changes are reviewed and reproducible. Update automation may propose a change but does not apply it at runtime.
+- AIOStreams native authentication protects human/configuration surfaces while
+  public Stremio machine paths remain usable. No blanket ForwardAuth is used.
+- Changes are reproducible and observable. Future workload automation must
+  include health and recovery gates; platform changes remain reviewed.
 
 ## 9. Update strategy
 
-The intended flow is:
+The intended future workload flow is:
 
 ```text
-upstream image -> Renovate PR -> review and validation -> merge -> Kubernetes rollout
+stable upstream release -> digest detection -> controlled Kubernetes rollout -> health/readiness and recovery validation
 ```
 
-Renovate is configured for Kubernetes references beneath `k8s/`, with automerge disabled. Versioned tags are preferred where the upstream release process supports them; digest pinning is desirable once a real manifest and update workflow exist. Remux updates receive deliberate compatibility review. See [`docs/upgrade-strategy.md`](docs/upgrade-strategy.md).
+This milestone does not deploy an automatic application updater. AIOStreams
+intentionally tracks stable `latest`; Keel is the leading future candidate,
+subject to digest observation, health gates, and mutable-tag rollback proof.
+Renovate remains review-oriented platform/dependency awareness, with automerge
+disabled. See [`docs/upgrade-strategy.md`](docs/upgrade-strategy.md),
+[`docs/plan.md`](docs/plan.md), and
+[`docs/decisions/0006-automatic-application-updates.md`](docs/decisions/0006-automatic-application-updates.md).
 
 ## 10. Roadmap
 
-1. Build the pinned Debian 13 template, clone `k3s01`, and verify the Debian baseline. (Validated.)
-2. Install the pinned single-node K3s server only after the Debian baseline passes. (Validated.)
-3. Measure and validate the K3s CNI/Flannel MTU against the 9000-byte VM underlay; do not copy the underlay value blindly. (Validated locally on one node.)
-4. Verify current AIOStreams and Remux image names, tags, ports, health behavior, persistence paths, and configuration requirements from their primary repositories.
-5. Add minimal Kubernetes-native manifests and example-safe configuration for the workloads.
-6. Add cert-manager and Traefik configuration using the supported K3s HelmChartConfig path, then validate staging certificates, ingress, persistence, redirect behavior, and rollback.
-7. Run the single-node stack, document observed operational commands, and promote only proven configuration.
+See the living roadmap in [`docs/plan.md`](docs/plan.md). Phases 0–2 are
+validated; Phase 3 is the current AIOStreams deployment; edge consolidation,
+Remux, selective Authelia, bounded application updates, optional DNS
+automation, and operational polish remain sequenced future phases.
 
 ## 11. Current project status
 
-The repository contains a validated Proxmox/Debian bootstrap and a pinned
-single-node K3s platform baseline. `k3s01` is Ready with bundled CoreDNS,
-Traefik, ServiceLB, local-path, and metrics-server validated through reboot;
-the observed Flannel overlay MTU is recorded in [`infra/k3s/README.md`](infra/k3s/README.md).
-No AIOStreams, Remux, cert-manager, Cloudflare integration, or application
-Ingress manifests have been deployed or claimed as production-ready.
+The repository contains a validated Proxmox/Debian bootstrap, pinned
+single-node K3s platform baseline, and cert-manager/Cloudflare DNS-01 TLS
+foundation. The AIOStreams workload and its redacted live-validation results
+are recorded in [`k8s/aiostreams/README.md`](k8s/aiostreams/README.md) and the
+[`AIOStreams validation report`](docs/validation/aiostreams-2026-08-27.md).
+Remux, Authelia, Keel, and external-dns are not deployed.
 
 ## 12. Upstream and reference projects
 
@@ -135,7 +184,7 @@ Licenses were checked before this bootstrap. No substantial upstream code or con
 docs/                 Architecture and operations documentation
 docs/decisions/       Short architecture decision records
 infra/proxmox/        Debian Cloud-Init template and VM clone automation
-scripts/verify/       Guest baseline verification scripts
+scripts/verify/       Guest and workload verification scripts
 k8s/                  Kubernetes-native configuration as contracts are verified
 examples/             Redacted, non-secret examples only
 renovate.json         Conservative image update policy

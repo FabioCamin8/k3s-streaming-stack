@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aiostreams-bootstrap
+type: Opaque
+data:
+  BASE_URL: __AIOSTREAMS_BASE_URL_B64__
+  SECRET_KEY: __AIOSTREAMS_SECRET_KEY_B64__
+  AIOSTREAMS_AUTH: __AIOSTREAMS_AUTH_B64__
+  TRUSTED_IPS: __AIOSTREAMS_TRUSTED_IPS_B64__
+stringData:
+  DATABASE_URI: "sqlite://./data/db.sqlite"
+  PORT: "3000"
+  NODE_ENV: "production"
+  AIOSTREAMS_AUTH_REQUIRED: "true"
+  SETTINGS_REFRESH_INTERVAL: "0"
+  EXPOSE_USER_COUNT: "false"
