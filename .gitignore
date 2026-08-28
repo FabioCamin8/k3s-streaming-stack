@@ -17,6 +17,8 @@ k8s/platform/cert-manager/operator.env
 k8s/platform/cert-manager/rendered/
 k8s/aiostreams/operator.env
 k8s/aiostreams/rendered/
+k8s/remux/operator.env
+k8s/remux/rendered/
 infra/cert-manager/operator/
 
 # Operator-managed cert-manager configuration and rendered resources

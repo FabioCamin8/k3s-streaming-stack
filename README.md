@@ -8,9 +8,11 @@ A small, reproducible K3s-based streaming stack using bundled Traefik, AIOStream
 
 This repository documents and incrementally implements a focused streaming stack on a Debian 13 VM running under Proxmox VE. It is intended to be understandable, reproducible, self-healing within a single node, and low-maintenance without unnecessary control planes.
 
-The current milestone implements and validates the AIOStreams workload on the
-existing K3s platform. Remux remains future work because its upstream contract
-and migration/redirect behavior still require separate validation.
+The current milestone implements the Remux client layer on the existing K3s
+platform and integrates it with the already validated AIOStreams workload.
+The workload contract is source-verified; live cluster validation remains an
+operator-side gate when cluster access is available, and this checkout never
+treats unavailable live evidence as a PASS.
 
 ## 2. Scope
 
@@ -18,7 +20,8 @@ In scope:
 
 - A single-node K3s cluster using the bundled containerd, Traefik v3, CoreDNS, and local-path storage.
 - AIOStreams with SQLite, persistent `/app/data`, native authentication, and public HTTPS ingress with an operator-selected public port.
-- A documented future Remux workload with SQLite and persistent `/data`.
+- Remux with SQLite, persistent `/data`, Jellyfin-compatible HTTP endpoints,
+  and internal AIOStreams integration.
 - Cloudflare-managed DNS.
 - cert-manager with ACME DNS-01 and a narrowly scoped Cloudflare API token.
 - Renovate awareness for Kubernetes and platform image references under `k8s/`.
@@ -28,16 +31,16 @@ Explicitly out of scope for v0.1:
 - A multi-node cluster or high availability.
 - Docker, Podman, Longhorn, Ceph, NFS, Redis, or PostgreSQL.
 - Argo CD, Flux, Prometheus, Grafana, or unnecessary dashboards/control planes.
-- Remux, Authelia, Keel, external-dns, and any automatic application updater in this milestone.
+- Authelia, Keel, external-dns, and any automatic application updater in this milestone.
 - Committing real domains, addresses, credentials, kubeconfig files, or private keys.
 
 ## 3. Architecture
 
 The target is a Debian 13 VM, not an LXC container. The validated platform
 uses one K3s server with bundled containerd, Traefik, CoreDNS, ServiceLB,
-local-path storage, metrics-server, and cert-manager. AIOStreams is a separate
-one-replica workload with local persistent data; Remux remains future work.
-Traefik is the only ingress controller.
+local-path storage, metrics-server, and cert-manager. AIOStreams and Remux are
+separate one-replica workloads with local persistent data; Traefik is the only
+ingress controller.
 
 The Proxmox underlay uses MTU 9000 through the physical network, bridge, VirtIO NIC, and Debian guest. The VM provisioning path declares the NIC MTU explicitly. The future K3s CNI/Flannel overlay MTU is intentionally not pinned here; it will be measured and validated after K3s bootstrap.
 
@@ -71,13 +74,14 @@ this workload but can be blocked on unusually restrictive networks. Use only
 one public port for AIOStreams. The router rule is narrowly TCP-only; do not
 expose SSH, the Kubernetes API, NodePorts, or the whole node.
 
-Remux should eventually expose Jellyfin-compatible APIs, catalog, and search to
-a compatible client. Where it supports an HTTP redirect to an upstream/debrid
-URL, the client should fetch video directly so bytes bypass the K3s host.
-AIOStreams remains publicly reachable for independent configuration and as a
-direct Stremio fallback until Remux is validated. If AIOStreams later becomes
-internal-only, Remux must never redirect clients to a `*.svc.cluster.local` or
-other client-unreachable URL.
+Remux exposes Jellyfin-compatible APIs, catalog, search, playback, and
+WebSocket paths to compatible clients. It consumes the AIOStreams Stremio
+manifest through the in-cluster Service DNS name. Its per-addon HTTP redirect
+option is disabled for AIOStreams, so an internal URL cannot be returned to a
+client; external CDN/debrid redirects remain a separately testable behavior.
+AIOStreams remains available for independent configuration and as a direct
+Stremio fallback. The WAN streaming forward is currently intentionally disabled
+by the operator; local/LAN Traefik and TLS checks do not require it.
 
 ## 4. Why K3s
 
@@ -99,7 +103,13 @@ See [`docs/proxmox-vm.md`](docs/proxmox-vm.md) and [ADR-0001](docs/decisions/000
 
 ### Remux
 
-[Remux](https://github.com/lostb1t/remux) is the client-facing compatibility layer for the intended user flow. The planned first deployment is one replica, SQLite, and persistent `/data`. Remux is treated as early-stage software: image updates require review, and rollback must remain possible.
+[Remux](https://github.com/lostb1t/remux) is the client-facing compatibility
+layer for the intended user flow. This milestone defines the stable
+`ghcr.io/lostb1t/remux:v0.27.0` image as one replica with SQLite and persistent
+`/data`, then configures AIOStreams as an internal Stremio addon. Remux is
+treated as early-stage software: image updates require review, and rollback
+must remain possible. Cluster deployment and runtime evidence are recorded
+only after the operator-side checks run.
 
 ## 7. Cloudflare and TLS
 
@@ -141,28 +151,31 @@ stable upstream release -> digest detection -> controlled Kubernetes rollout -> 
 ```
 
 This milestone does not deploy an automatic application updater. AIOStreams
-intentionally tracks stable `latest`; Keel is the leading future candidate,
-subject to digest observation, health gates, and mutable-tag rollback proof.
-Renovate remains review-oriented platform/dependency awareness, with automerge
-disabled. See [`docs/upgrade-strategy.md`](docs/upgrade-strategy.md),
+intentionally tracks stable `latest`; Remux uses a versioned release tag until
+its migration, client, stream, and rollback evidence justify a different
+policy. Keel is the leading future candidate for AIOStreams, subject to digest
+observation, health gates, and mutable-tag rollback proof. Renovate remains
+review-oriented platform/dependency awareness, with automerge disabled. See
+[`docs/upgrade-strategy.md`](docs/upgrade-strategy.md),
 [`docs/plan.md`](docs/plan.md), and
 [`docs/decisions/0006-automatic-application-updates.md`](docs/decisions/0006-automatic-application-updates.md).
 
 ## 10. Roadmap
 
-See the living roadmap in [`docs/plan.md`](docs/plan.md). Phases 0–2 are
-validated; Phase 3 is the current AIOStreams deployment; edge consolidation,
-Remux, selective Authelia, bounded application updates, optional DNS
-automation, and operational polish remain sequenced future phases.
+See the living roadmap in [`docs/plan.md`](docs/plan.md). Phases 0–3 are
+validated; Phase 4 is the current Remux deployment; selective Authelia,
+bounded application updates, optional DNS automation, and operational polish
+remain sequenced future phases.
 
 ## 11. Current project status
 
 The repository contains a validated Proxmox/Debian bootstrap, pinned
-single-node K3s platform baseline, and cert-manager/Cloudflare DNS-01 TLS
-foundation. The AIOStreams workload and its redacted live-validation results
-are recorded in [`k8s/aiostreams/README.md`](k8s/aiostreams/README.md) and the
-[`AIOStreams validation report`](docs/validation/aiostreams-2026-08-27.md).
-Remux, Authelia, Keel, and external-dns are not deployed.
+single-node K3s platform baseline, cert-manager/Cloudflare DNS-01 TLS
+foundation, and the AIOStreams and Remux workload contracts. AIOStreams'
+historical redacted external validation is recorded in
+[`docs/validation/aiostreams-2026-08-27.md`](docs/validation/aiostreams-2026-08-27.md).
+Remux live evidence is intentionally recorded only after the cluster-side
+checks are actually run. Authelia, Keel, and external-dns are not deployed.
 
 ## 12. Upstream and reference projects
 
