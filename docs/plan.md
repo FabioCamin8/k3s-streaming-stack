@@ -24,7 +24,7 @@ recovery. `external-dns` remains optional future work.
 
 ## Current milestone
 
-### Phase 3 - AIOStreams — THIS PR / implemented and live-validated
+### Phase 3 - AIOStreams — COMPLETE / implemented and live-validated
 
 One `latest` replica with `imagePullPolicy: Always`, SQLite, `/app/data`
 local-path PVC, public Traefik HTTPS ingress, native auth, DB-backed health,
@@ -49,15 +49,18 @@ MediaFlow and choose deliberately between TLS termination, SNI passthrough, a
 K3s Traefik consolidation point, or a minimal existing external edge. Do not
 introduce a new reverse-proxy product in the AIOStreams milestone.
 
-### Phase 4 - Remux — planned
+### Phase 4 - Remux — THIS PR
 
-Jellyfin-compatible client endpoint, `/data` persistence, AIOStreams
-integration, per-addon proxy versus HTTP 302 redirect, Infuse/Swiftfin live
-validation, migration/reboot/recovery checks, and an explicit invariant that
-no redirect may expose `*.svc.cluster.local` or any other client-unreachable
-internal AIOStreams URL when AIOStreams becomes internal-only.
+Stable versioned Remux deployment with Jellyfin-compatible client endpoint,
+`/data` persistence, internal AIOStreams integration, per-addon proxy versus
+HTTP 302 redirect handling, local/LAN Traefik/TLS validation, and the explicit
+invariant that no redirect may expose `*.svc.cluster.local` or any other
+client-unreachable internal AIOStreams URL. Infuse/Swiftfin status is reported
+only when those clients are actually available and tested. Cluster-side
+runtime evidence remains pending until an authorized K3s access path is
+available.
 
-### Phase 5 - selective Authelia — planned
+### Phase 5 - selective Authelia — NEXT
 
 Protect human/admin/configuration surfaces without blanket-protecting Stremio,
 Jellyfin, or other machine protocol endpoints. Prefer AIOStreams native OIDC

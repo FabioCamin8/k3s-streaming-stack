@@ -6,8 +6,9 @@ The deployment target is one Debian 13 VM on Proxmox VE. The reproducible
 Cloud-Init template, full-clone Debian baseline, pinned K3s node, and
 cert-manager DNS-01/TLS platform have been executed and validated. K3s
 supplies its bundled containerd, CoreDNS, Traefik v3, ServiceLB, local-path
-provisioner, and metrics-server. AIOStreams is the current one-replica
-application workload; Remux remains future work.
+provisioner, and metrics-server. AIOStreams is the direct Stremio backend and
+Remux is the Jellyfin-compatible client layer; both are one-replica workloads
+with local persistent data.
 
 There is no Docker or Podman dependency. There is no second ingress controller. There is no claim of high availability: loss of the VM takes the cluster and its local data offline.
 
@@ -48,10 +49,18 @@ Multi-node overlay transport remains unvalidated.
 2. If the origin is reachable, DNS-only traffic goes directly to the operator-selected public port. A router/NAT rule maps that port to Traefik's internal HTTPS port 443; if HTTP proxying is deliberately enabled, traffic first enters through Cloudflare's edge, according to the choice recorded in [`docs/cloudflare.md`](cloudflare.md).
 3. Traefik receives HTTP(S) traffic through the reachable K3s networking path and routes by hostname to the selected Kubernetes Service.
 4. Traefik routes the public AIOStreams HTTPS host to its ClusterIP Service.
-5. AIOStreams handles stream aggregation and keeps its application data and default disk caches under persistent `/app/data`.
-6. Remux is a future client-facing layer. It may call AIOStreams and, where supported, return an HTTP redirect to an upstream/debrid URL so video bytes bypass the K3s host.
+5. Remux receives Jellyfin-compatible client requests and calls AIOStreams over
+   the `aiostreams.streaming.svc.cluster.local` Service, not through the public
+   router/NAT path.
+6. AIOStreams handles stream aggregation and keeps its application data and
+   default disk caches under persistent `/app/data`.
+7. Remux proxies internal AIOStreams HTTP sources. A per-addon HTTP redirect is
+   available for externally reachable direct-play sources, but it is disabled
+   for AIOStreams so a `*.svc.cluster.local` URL cannot reach a client.
 
-The persistence paths and workload relationships are architectural decisions from the project brief. They must still be checked against the current upstream images before a manifest encodes them.
+The persistence paths and workload relationships are architectural decisions
+validated against the current upstream image contracts in
+[`docs/research/remux-current-contract-2026-08-28.md`](research/remux-current-contract-2026-08-28.md).
 
 ## External HTTPS exposure contract
 
@@ -79,7 +88,7 @@ The Kubernetes layout is intentionally small:
 
 - `k8s/infrastructure/`: cluster-level configuration that is proven necessary, such as supported Traefik and certificate integration.
 - `k8s/aiostreams/`: the implemented AIOStreams Deployment, Service, local-path PVC, private-rendered Secret, and Traefik Ingress.
-- `k8s/remux/`: reserved for the future Remux workload after its upstream contract is verified.
+- `k8s/remux/`: the Remux Deployment, Service, local-path PVC, private-rendered Ingress, and internal AIOStreams addon helper.
 
 Every workload file belongs here only after its image, port, probe, storage,
 security, and configuration assumptions have a primary-source basis.
@@ -91,18 +100,44 @@ security, and configuration assumptions have a primary-source basis.
 - AIOStreams native authentication protects human/admin/configuration surfaces;
   public Stremio machine paths are not blanket-protected by an external
   ForwardAuth. Future Authelia integration must remain selective.
+- Remux uses its Jellyfin-compatible native authentication and public bootstrap
+  routes. No blanket ForwardAuth is placed before its protocol, streaming, or
+  WebSocket paths; human/admin protection is a future selective-Authelia task.
 - AIOStreams accepts forwarded client IP information only when the direct
   Traefik source is in the exact private `TRUSTED_IPS` range observed for this
   K3s topology. The operator value is not committed here.
 - Cloudflare DNS-01 is an external certificate-validation dependency, not an application secret store.
 - The Cloudflare API token is a deployment secret scoped to one zone and DNS operations only.
 - Local-path volumes are node-local state and must be backed up independently.
-- A redirect target is external and untrusted input. Remux behavior must be tested for safe redirect handling before production use.
+- A redirect target is external and untrusted input. Remux's redirect behavior
+  is per addon and only applies to HTTP direct play; AIOStreams is configured
+  with redirects disabled because its manifest URL is cluster-internal.
+
+## Remux client path
+
+The intended application topology after this milestone is:
+
+```text
+                 Traefik
+                /       \
+               /         \
+          Remux       AIOStreams
+            |             ^
+            |             |
+            +-------------+
+              internal HTTP
+```
+
+Infuse, Swiftfin, or another Jellyfin-compatible client reaches Remux through
+the Traefik TLS host. Remux supplies the catalog and playback API, while
+AIOStreams remains independently available for configuration/admin and direct
+Stremio fallback. The client path must never receive an internal Service DNS
+name in a redirect `Location` header.
 
 ## Future edge consolidation
 
-This is a roadmap objective only and is not deployed by the AIOStreams
-milestone. A future edge could accept one public TCP/443 listener and route by
+This is a roadmap objective only and is not deployed by this milestone. A
+future edge could accept one public TCP/443 listener and route by
 hostname, for example:
 
 ```text

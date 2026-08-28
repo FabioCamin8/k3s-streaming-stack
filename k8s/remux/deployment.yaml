@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: remux
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: remux
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: remux
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: remux
+          image: ghcr.io/lostb1t/remux:0.27.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: DATA_DIR
+              value: /data
+            - name: WEB_PATH
+              value: /app/jellyfin-web
+            - name: DASHBOARD_PATH
+              value: /app/dashboard
+            - name: DATABASE_URL
+              value: sqlite:///data/db.sqlite?mode=rwc
+            - name: TORRENT_DATA_DIR
+              value: /data/torrents
+            - name: FFMPEG_PATH
+              value: /usr/lib/jellyfin-ffmpeg/ffmpeg
+            - name: FFPROBE_PATH
+              value: /usr/lib/jellyfin-ffmpeg/ffprobe
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 10
+            failureThreshold: 120
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: remux-data

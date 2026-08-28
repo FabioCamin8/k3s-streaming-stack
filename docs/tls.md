@@ -1,9 +1,9 @@
 # TLS baseline
 
 This milestone establishes the smallest reproducible TLS foundation for the
-single-node K3s platform. AIOStreams now consumes that foundation through the
-production Traefik entrypoint; Remux, Authelia, external-dns, and a Traefik
-dashboard remain outside scope.
+single-node K3s platform. AIOStreams and Remux consume that foundation through
+the production Traefik entrypoint, each with its own host-specific Ingress.
+Authelia, external-dns, and a Traefik dashboard remain outside scope.
 
 ## Decisions
 
@@ -90,3 +90,13 @@ issuance before relying on renewal.
 
 No token, private key, generated certificate, or real deployment hostname is
 checked in by this baseline.
+
+## Remux TLS boundary
+
+Remux uses a separate Ingress and certificate Secret, with the same Traefik
+`websecure` entrypoint and DNS-01 ClusterIssuer. Render its hostname outside
+Git, apply the Remux bundle only after the upstream contract review, and
+validate the route locally/LAN-side with correct SNI. The operator's current
+WAN streaming forward is intentionally disabled, so its absence is not a TLS
+failure. Do not place an internal AIOStreams Service hostname in a certificate
+or client-facing URL; Remux uses that name only for in-cluster addon fetches.

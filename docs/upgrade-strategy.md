@@ -1,10 +1,11 @@
 # Upgrade strategy
 
 The current AIOStreams workload deliberately follows the upstream stable
-`latest` tag with `imagePullPolicy: Always`. No runtime application updater is
-deployed or claimed by this milestone. `Always` controls what a newly created
-or restarted Pod pulls; it does not detect a changed tag, prove an update was
-safe, or provide a rollback image.
+`latest` tag with `imagePullPolicy: Always`. Remux is pinned to the stable
+versioned `v0.27.0` release with `imagePullPolicy: IfNotPresent`. No runtime
+application updater is deployed or claimed by this milestone. `Always` controls
+what a newly created or restarted Pod pulls; it does not detect a changed tag,
+prove an update was safe, or provide a rollback image.
 
 The current application path is operator-controlled:
 
@@ -16,6 +17,12 @@ The intended future path is a separate, gated controller flow:
 
 ```text
 stable release -> digest change observed -> bounded AIOStreams rollout -> health and smoke gates -> retain known recovery digest
+```
+
+Remux remains on a separate reviewed update path:
+
+```text
+Remux release -> contract and migration review -> controlled rollout -> Jellyfin, stream, and recovery gates
 ```
 
 ## Future automatic application updates
@@ -39,8 +46,9 @@ The mutable `latest` tag makes a ReplicaSet rollback insufficient: a recreated
 Pod can pull newer bytes under the same tag. Automatic rollback is therefore
 not claimed until the previous-digest recovery drill passes. Breaking upstream
 changes, failed migrations, storage recovery, and exceptional failures may
-still require a human. Remux remains more conservative until its own contract
-and recovery path are validated.
+still require a human. Remux remains more conservative: its versioned tag is
+not automatically advanced, and the running image digest must be captured
+before an update is accepted.
 
 ## Renovate policy
 
@@ -75,7 +83,11 @@ data boundary, and retain a known immutable previous image before enabling any
 automatic updater. A Deployment rollback alone is insufficient when `latest`
 has moved.
 
-Remux is early-stage software and receives an explicit compatibility review even for apparently small updates. Automerge remains disabled, especially for Remux. Keel is only a future candidate; it is not installed or authorized by this milestone.
+Remux is early-stage software and receives an explicit compatibility review even
+for apparently small updates. Review the migration, client, internal
+AIOStreams, proxy/redirect, and persistence behavior before changing its pinned
+tag. Automerge remains disabled, especially for Remux. Keel is only a future
+candidate; it is not installed or authorized by this milestone.
 
 ## K3s and certificate upgrades
 

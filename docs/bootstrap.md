@@ -3,8 +3,9 @@
 This is the intended sequence for a fresh deployment. The Proxmox/Debian
 template, `k3s01` full-clone lifecycle, pinned K3s platform, and cert-manager
 DNS-01/TLS foundation have been executed and validated with the repository
-automation. AIOStreams is the current application milestone; Remux and the
-later security/update controllers remain separate phases in [`plan.md`](plan.md).
+automation. AIOStreams is the completed application milestone and Remux is the
+current application phase; the later security/update controllers remain
+separate phases in [`plan.md`](plan.md).
 
 ## Prerequisites
 
@@ -75,6 +76,15 @@ later security/update controllers remain separate phases in [`plan.md`](plan.md)
 6. Apply the rendered AIOStreams bundle, run the workload verifier, and record
    the actual image digest and redacted lifecycle evidence in private operator
    notes and the PR.
+7. Verify the Remux contract in [`k8s/remux/README.md`](../k8s/remux/README.md),
+   copy `operator.env.example` to a protected path, replace the private
+   AIOStreams user path, render outside Git, and apply the Remux bundle. Keep
+   the WAN streaming forward disabled during this milestone.
+8. Bootstrap one Remux admin user through its startup wizard, obtain a native
+   Remux API/session token out of band, and run the addon helper with
+   `REMUX_API_TOKEN_FILE`. Validate Remux locally/LAN-side through Traefik,
+   then record protocol, integration, stream, redirect, persistence, and
+   resource evidence only for checks actually executed.
 
 ## Application stop conditions
 
@@ -86,16 +96,19 @@ Stop before applying a manifest when any of these are unknown:
 - The certificate issuer would use a production ACME endpoint before staging succeeds.
 - The proposed configuration requires Docker socket access, a second runtime,
   or a storage system outside v0.1 scope.
-- The AIOStreams `SECRET_KEY`, native auth credentials, or public hostname has
-  no protected operator-file delivery path.
+- The AIOStreams `SECRET_KEY`, native auth credentials, Remux API token,
+  private AIOStreams manifest path, or public hostname has no protected
+  operator-file delivery path.
 
 ## First verification pass
 
-The AIOStreams deployment pass should prove the smallest useful path: the node
-and platform are healthy, Traefik serves the production HTTPS host, native
-login protects configuration/admin access, the public Stremio manifest remains
+The AIOStreams deployment pass proved the smallest useful path: the node and
+platform are healthy, Traefik serves the production HTTPS host, native login
+protects configuration/admin access, the public Stremio manifest remains
 usable without a browser session, the PVC survives Pod recreation and a safe
 node reboot, and the actual Traefik source range is validated before trusting
-forwarded client IP headers. Provider-backed playback and Remux redirect
-behavior are later gates. A failed proof is a reason to correct the responsible
-layer, not to add another component.
+forwarded client IP headers. The Remux pass adds Jellyfin-compatible protocol,
+internal AIOStreams, proxy/redirect, and local/LAN TLS gates. Provider-backed
+playback and physical Infuse/Swiftfin behavior remain optional and are never
+claimed without direct evidence. A failed proof is a reason to correct the
+responsible layer, not to add another component.

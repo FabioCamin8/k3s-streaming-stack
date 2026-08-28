@@ -32,9 +32,20 @@ The certificate lifecycle is:
 
 ## Proxy decision
 
-The initial default is DNS-only while the stack is brought up. This makes the network path and redirect behavior observable and avoids sending streaming traffic through Cloudflare by assumption. Orange-cloud HTTP proxying is not part of this milestone.
+The initial default is DNS-only while the stack is brought up. This makes the
+network path and redirect behavior observable and avoids sending streaming
+traffic through Cloudflare by assumption. The operator has intentionally
+disabled the current WAN streaming forward while the stack is under
+construction; this is not a workload failure and does not block local/LAN
+validation. Orange-cloud HTTP proxying is not part of this milestone.
 
-Cloudflare proxying is an explicit per-hostname decision. Before enabling it, verify the applicable Cloudflare product limits and terms, confirm that the application protocol is supported, and test authentication, forwarded client information, WebSocket behavior if required by the verified upstream contract, and Remux redirects.
+Cloudflare proxying is an explicit per-hostname decision. Before enabling it,
+verify the applicable Cloudflare product limits and terms, confirm that the
+application protocol is supported, and test authentication, forwarded client
+information, WebSocket behavior if required by the verified upstream contract,
+and Remux redirects. A Remux redirect is useful only for an externally
+reachable upstream URL; the internal AIOStreams Service must remain proxied by
+Remux with its addon redirect flag disabled.
 
 If proxying is enabled:
 
@@ -50,10 +61,12 @@ Create only the application records that are required, using deployment-specific
 The record was created out of band with the scoped cert-manager operator token.
 The private origin value was corrected through the existing scoped operator
 path to the observed public origin, and authoritative/public DNS now returns a
-non-private answer. The record remains DNS-only. For the selected deployment,
-the operator supplied a TCP-only WAN 8443 -> Traefik TCP/443 forward, and an
-independent external vantage then validated DNS, TCP, TLS, and application
-responses. This repository does not change NAT, firewall, or router state.
+non-private answer. The record remains DNS-only. Historically, the operator
+supplied a TCP-only WAN 8443 -> Traefik TCP/443 forward and an independent
+external vantage validated the AIOStreams DNS, TCP, TLS, and application path;
+that evidence remains valid for its original run. The forward is now
+intentionally disabled while Remux is under construction. This repository does
+not change NAT, firewall, or router state.
 
 ## Operational checks
 
@@ -62,8 +75,10 @@ responses. This repository does not change NAT, firewall, or router state.
 - Confirm certificates renew before their expiry window.
 - Confirm the certificate secret is not tracked by Git or included in support bundles.
 - Confirm the DNS-only origin and production certificate after a node reboot;
-  the application verifier and redacted evidence are recorded in
-  [`docs/validation/aiostreams-2026-08-27.md`](validation/aiostreams-2026-08-27.md).
+  the AIOStreams application verifier and redacted historical evidence are
+  recorded in [`docs/validation/aiostreams-2026-08-27.md`](validation/aiostreams-2026-08-27.md).
+- Validate the Remux host locally/LAN-side with `curl --resolve` or an
+  equivalent Host/SNI-preserving request; WAN forwarding is not required.
 - If proxying is enabled, confirm the observed client IP and scheme are derived only from trusted Cloudflare sources.
 - Confirm Internet reachability from an independent external vantage point;
   internal DNS, certificate, and Traefik checks are not a substitute.

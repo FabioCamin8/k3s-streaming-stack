@@ -27,7 +27,8 @@ promise.
    future updater is expected to observe digest changes behind that tag.
 3. Keel is the leading candidate for that future updater, but it is not
    deployed or approved by this milestone. Remux is early-stage 0.x software;
-   its initial policy remains more conservative and must be validated later.
+   its initial `v0.27.0` versioned release policy remains conservative and is
+   not automatically advanced.
 4. Automatic application updates require working startup/readiness/health
    checks, migration safety, persistence proof, failure testing, and a known
    previous-image recovery mechanism before they are enabled.
@@ -52,7 +53,9 @@ Routine workload maintenance can become near-zero after the future gates pass,
 but the system must preserve observable rollout status, durable application
 state, and a tested recovery path. The mutable AIOStreams tag improves
 upstream freshness but weakens tag-based reproducibility and makes rollback
-design an explicit lifecycle requirement.
+design an explicit lifecycle requirement. The Remux versioned tag improves
+reproducibility, but updates still require compatibility, migration, client,
+stream, and recovery review.
 
 ## Alternatives considered
 
