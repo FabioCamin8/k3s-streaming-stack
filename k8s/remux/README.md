@@ -24,7 +24,7 @@ and [release workflow](https://github.com/lostb1t/remux/blob/main/.github/workfl
 
 | Property | Deployment contract |
 | --- | --- |
-| Image | `ghcr.io/lostb1t/remux:v0.27.0` with `IfNotPresent` |
+| Image | `ghcr.io/lostb1t/remux:0.27.0` with `IfNotPresent` |
 | Container port | 3000/TCP |
 | Health | `GET /health`, a static HTTP 200 liveness endpoint |
 | Durable root | `/data` |

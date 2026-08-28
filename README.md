@@ -105,7 +105,7 @@ See [`docs/proxmox-vm.md`](docs/proxmox-vm.md) and [ADR-0001](docs/decisions/000
 
 [Remux](https://github.com/lostb1t/remux) is the client-facing compatibility
 layer for the intended user flow. This milestone defines the stable
-`ghcr.io/lostb1t/remux:v0.27.0` image as one replica with SQLite and persistent
+`ghcr.io/lostb1t/remux:0.27.0` image as one replica with SQLite and persistent
 `/data`, then configures AIOStreams as an internal Stremio addon. Remux is
 treated as early-stage software: image updates require review, and rollback
 must remain possible. Cluster deployment and runtime evidence are recorded

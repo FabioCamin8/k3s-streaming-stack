@@ -72,7 +72,7 @@ fi
 
 image=$(json_value deployment remux '{.spec.template.spec.containers[0].image}')
 pull_policy=$(json_value deployment remux '{.spec.template.spec.containers[0].imagePullPolicy}')
-if [[ $image == ghcr.io/lostb1t/remux:v0.27.0 && $pull_policy == IfNotPresent ]]; then
+if [[ $image == ghcr.io/lostb1t/remux:0.27.0 && $pull_policy == IfNotPresent ]]; then
     pass 'Deployment uses the reviewed Remux v0.27.0 image policy'
 else
     fail "unexpected image policy (image=$image pullPolicy=$pull_policy)"

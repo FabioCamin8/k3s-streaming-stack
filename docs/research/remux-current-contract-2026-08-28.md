@@ -13,7 +13,11 @@ to the deployed image.
   [`354ad11bd8534adce5b60e0e896c99a00cb67ec9`](https://github.com/lostb1t/remux/commit/354ad11bd8534adce5b60e0e896c99a00cb67ec9),
   ahead of the stable tag. `latest` is mutable and is not the initial
   deployment reference.
-- Image: `ghcr.io/lostb1t/remux:v0.27.0`.
+- Image: `ghcr.io/lostb1t/remux:0.27.0`.
+- The source release tag includes the `v` (`v0.27.0`), but the GHCR
+  container tag does not. An authorized registry lookup on 2026-08-28 returned
+  `404` for `v0.27.0` and `200` for `0.27.0`; the Kubernetes image reference
+  follows the published container tag.
 - The release workflow publishes the container for `linux/amd64` and
   `linux/arm64`; the image metadata is also described by the tagged
   [`Dockerfile`](https://github.com/lostb1t/remux/blob/v0.27.0/docker/Dockerfile)
