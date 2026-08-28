@@ -119,7 +119,9 @@ else
     fail "PVC is not ready (phase=$pvc_phase storageClass=$pvc_storage_class)"
 fi
 
-for key in BASE_URL SECRET_KEY DATABASE_URI AIOSTREAMS_AUTH AIOSTREAMS_AUTH_REQUIRED TRUSTED_IPS; do
+for key in BASE_URL SECRET_KEY DATABASE_URI AIOSTREAMS_AUTH AIOSTREAMS_AUTH_REQUIRED \
+    TRUSTED_IPS AIOSTREAMS_OIDC_ENABLED AIOSTREAMS_OIDC_ISSUER \
+    AIOSTREAMS_OIDC_CLIENT_ID AIOSTREAMS_OIDC_CLIENT_SECRET; do
     value=$("$KUBECTL" -n "$NAMESPACE" get secret aiostreams-bootstrap \
         -o "jsonpath={.data.$key}" 2>/dev/null || true)
     if [[ -n $value ]]; then

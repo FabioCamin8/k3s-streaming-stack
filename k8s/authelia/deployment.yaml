@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authelia
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: authelia
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: authelia
+    spec:
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: authelia
+          image: ghcr.io/authelia/authelia:4.39.20
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9091
+              protocol: TCP
+          env:
+            - name: X_AUTHELIA_CONFIG
+              value: /etc/authelia/configuration.yml
+            - name: X_AUTHELIA_CONFIG_FILTERS
+              value: template
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 10
+            failureThreshold: 120
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /config
+            - name: config
+              mountPath: /etc/authelia
+              readOnly: true
+            - name: users
+              mountPath: /etc/authelia-users
+              readOnly: true
+            - name: secrets
+              mountPath: /run/authelia-secrets
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: authelia-data
+        - name: config
+          configMap:
+            name: authelia-config
+        - name: users
+          secret:
+            secretName: authelia-users
+            defaultMode: 0400
+        - name: secrets
+          secret:
+            secretName: authelia-secrets
+            defaultMode: 0400

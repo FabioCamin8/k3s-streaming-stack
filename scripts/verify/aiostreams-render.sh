@@ -20,6 +20,8 @@ write_config() {
         printf 'AIOSTREAMS_SECRET_KEY=%s\n' '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
         printf 'AIOSTREAMS_AUTH=admin:render-test-password\n'
         printf 'AIOSTREAMS_TRUSTED_IPS=192.0.2.0/24\n'
+        printf 'AIOSTREAMS_OIDC_ISSUER=https://auth.example.com/\n'
+        printf 'AIOSTREAMS_OIDC_CLIENT_SECRET=render-test-client-secret\n'
     } > "$config"
 }
 

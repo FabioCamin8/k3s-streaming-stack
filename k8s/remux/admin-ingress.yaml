@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: remux-admin
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.middlewares: streaming-authelia-forwardauth@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - __REMUX_HOST__
+      secretName: remux-tls
+  rules:
+    - host: __REMUX_HOST__
+      http:
+        paths:
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: remux
+                port:
+                  name: http

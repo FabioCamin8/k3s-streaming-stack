@@ -3,9 +3,9 @@
 This directory contains the public-safe Kubernetes contract for one
 AIOStreams replica. The workload is deliberately small: the bundled K3s
 Traefik handles HTTPS, SQLite is stored on one local-path PVC, and native
-AIOStreams authentication protects human-facing configuration and admin
-surfaces. Remux, Authelia, Redis, PostgreSQL, and an image updater are not part
-of this workload.
+AIOStreams authentication remains available as recovery, and Authelia is used
+as the native OIDC provider for the human-facing configuration/admin flow.
+Remux, Redis, PostgreSQL, and an image updater are not part of this workload.
 
 ## Current upstream contract
 
@@ -86,6 +86,20 @@ PodCIDR is an operator-specific value and is kept only in the private file.
 Do not use the upstream Docker `172.17.0.0/16` default without checking the
 K3s path.
 
+Set these additional values in the protected operator file after the
+Authelia issuer and client have been provisioned:
+
+```text
+AIOSTREAMS_OIDC_ISSUER=https://auth.example.com/
+AIOSTREAMS_OIDC_CLIENT_SECRET=<private-client-secret>
+```
+
+The renderer places the client secret in the generated Kubernetes Secret. The
+fixed `aiostreams` OIDC client requests `openid profile email groups`, maps the
+Authelia `admins` group to AIOStreams `admin`, retains local login, and does not
+enable automatic provider redirects. Use the exact issuer returned by Authelia's
+`/.well-known/openid-configuration`, including its trailing slash.
+
 Render into a new temporary directory and inspect it without publishing it:
 
 ```sh
@@ -106,15 +120,19 @@ after the apply/validation session and never commit it.
 
 ## Authentication and request paths
 
-Native authentication is the application boundary for this milestone. The
-operator credential is supplied through `AIOSTREAMS_AUTH`; the config page is
-gated by `AIOSTREAMS_AUTH_REQUIRED=true`, and the dashboard/API session is
-created through AIOStreams' own login endpoint. With auth required and no
-`CONFIG_ACCESS_KEY` environment value, the current release generates and
-persists its config-write key in the application settings store; an
-authenticated native session injects that key for authorized config writes.
-A blanket Traefik ForwardAuth is intentionally absent so Stremio machine paths
-remain usable.
+Native authentication remains the application recovery boundary. The operator
+credential is supplied through `AIOSTREAMS_AUTH`; the config page is gated by
+`AIOSTREAMS_AUTH_REQUIRED=true`, and the dashboard/API session can be created
+through AIOStreams' own login endpoint. Native OIDC is enabled separately for
+the human configuration/admin flow and federates to Authelia. Local login is
+kept enabled and automatic OIDC redirect is disabled during rollout so a bad
+provider configuration does not remove the recovery path. A blanket Traefik
+ForwardAuth is intentionally absent so Stremio machine paths remain usable.
+
+The OIDC callback is `/api/v1/auth/oidc/callback` on the exact `BASE_URL`.
+OIDC discovery/login/logout and the authenticated configuration page must be
+validated through Traefik. The OIDC browser session is independent of the
+configured Stremio UUID/password machine URL.
 
 The public base manifest is useful for discovery and returns a configuration
 required response until a safe per-user configuration exists. A configured

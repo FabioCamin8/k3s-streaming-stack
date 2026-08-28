@@ -1,12 +1,14 @@
 # Cloudflare DNS and TLS
 
 Cloudflare is the DNS provider for the deployment. It is not assumed to be the
-video proxy, application authentication layer, or secret store. The current
+video proxy, application authentication layer, or secret store. The validated
 AIOStreams record is configured DNS-only to select direct-origin semantics;
 that setting and the certificate do not by themselves prove public Internet
-reachability for every deployment. The selected live route was externally
-validated after the operator supplied its NAT rule. Hostname and address are
-operator data, not repository data.
+reachability for every deployment. Authelia and Remux use separate hostnames
+and host-specific Traefik certificates in the selective-authentication design;
+their records and reachability are separate operator gates. The selected live
+route was externally validated after the operator supplied its NAT rule.
+Hostnames and addresses are operator data, not repository data.
 
 The public service port is separate from DNS and Kubernetes. The operator may
 use standard direct HTTPS (`WAN TCP/443 -> Traefik TCP/443`) or alternate direct
@@ -56,7 +58,14 @@ If proxying is enabled:
 
 ## DNS records
 
-Create only the application records that are required, using deployment-specific values outside Git. The configured application record is a single DNS-only A record intended for a publicly reachable Traefik origin. Keep the public repository limited to example names and omit real addresses. DNS contains no port: a public 8443 choice is expressed only by the client URL and the router/NAT rule. A DNS record does not by itself expose a Kubernetes Service; Traefik ingress and any external firewall/NAT remain separate controls.
+Create only the application records that are required, using deployment-specific
+values outside Git. The AIOStreams, Remux, and Authelia records are independent
+DNS-only hostnames intended for the operator's Traefik origin; a record is not
+created merely because a workload has a Kubernetes Service. Keep the public
+repository limited to example names and omit real addresses. DNS contains no
+port: a public 8443 choice is expressed only by the client URL and the
+router/NAT rule. A DNS record does not by itself expose a Kubernetes Service;
+Traefik ingress and any external firewall/NAT remain separate controls.
 
 The record was created out of band with the scoped cert-manager operator token.
 The private origin value was corrected through the existing scoped operator

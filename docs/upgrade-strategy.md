@@ -2,10 +2,13 @@
 
 The current AIOStreams workload deliberately follows the upstream stable
 `latest` tag with `imagePullPolicy: Always`. Remux is pinned to the stable
-versioned `v0.27.0` release with `imagePullPolicy: IfNotPresent`. No runtime
-application updater is deployed or claimed by this milestone. `Always` controls
-what a newly created or restarted Pod pulls; it does not detect a changed tag,
-prove an update was safe, or provide a rollback image.
+versioned `v0.27.0` release with `imagePullPolicy: IfNotPresent`. Authelia is
+pinned to `4.39.20` with `imagePullPolicy: IfNotPresent`; its configuration,
+OIDC signing material, MFA state, and SQLite storage make it a stateful
+authentication workload. No runtime application updater is deployed or
+claimed by this milestone. `Always` controls what a newly created or restarted
+Pod pulls; it does not detect a changed tag, prove an update was safe, or
+provide a rollback image.
 
 The current application path is operator-controlled:
 
@@ -24,6 +27,19 @@ Remux remains on a separate reviewed update path:
 ```text
 Remux release -> contract and migration review -> controlled rollout -> Jellyfin, stream, and recovery gates
 ```
+
+Authelia remains on a deliberate reviewed update path:
+
+```text
+Authelia release -> schema/config and security review -> protected-state backup -> controlled rollout -> login, OIDC, MFA, and recovery gates
+```
+
+An Authelia update is not accepted from an image tag alone. Review the tagged
+configuration schema and migration notes, preserve the users file and all
+secret/signing material, back up the SQLite PVC through the later application
+backup boundary, and retain a known compatible image/configuration pair for
+rollback. A K3s datastore backup protects Kubernetes Secrets and objects but
+does not replace a local-path PVC backup.
 
 ## Future automatic application updates
 
@@ -48,7 +64,10 @@ not claimed until the previous-digest recovery drill passes. Breaking upstream
 changes, failed migrations, storage recovery, and exceptional failures may
 still require a human. Remux remains more conservative: its versioned tag is
 not automatically advanced, and the running image digest must be captured
-before an update is accepted.
+before an update is accepted. Authelia is also not automatically advanced:
+authentication outages, invalid configuration, secret/signing-key mistakes,
+and MFA recovery failures must fail closed for human surfaces and require
+operator review.
 
 ## Renovate policy
 
@@ -77,6 +96,16 @@ Every workload update should answer:
 - Does ingress, TLS, authentication, and the Remux redirect path still work?
 - Is rollback to the previous tag or digest documented and possible?
 
+For Authelia specifically, also answer:
+
+- Did the tagged configuration schema or storage migration change?
+- Are the file users, session/storage/OIDC secrets, signing key, MFA state, and
+  SQLite PVC covered by the protected recovery procedure?
+- Do health, portal login, invalid-login rejection, OIDC discovery/callback,
+  TOTP, logout, and the AIOStreams/Remux selective boundaries still pass?
+- Can the previous compatible image and configuration be restored without
+  weakening native machine-protocol authentication?
+
 For AIOStreams specifically, record the observed runtime digest, verify the
 DB-backed health endpoint and native authentication, confirm the local-path
 data boundary, and retain a known immutable previous image before enabling any
@@ -88,6 +117,12 @@ for apparently small updates. Review the migration, client, internal
 AIOStreams, proxy/redirect, and persistence behavior before changing its pinned
 tag. Automerge remains disabled, especially for Remux. Keel is only a future
 candidate; it is not installed or authorized by this milestone.
+
+Authelia is early in this repository's lifecycle and receives an explicit
+security and compatibility review for every version change. Do not enable
+automatic updates for it in a later controller milestone without proving
+configuration migration, secret/signing-key preservation, MFA recovery, and
+rollback from a known immutable image.
 
 ## K3s and certificate upgrades
 

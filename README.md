@@ -8,11 +8,11 @@ A small, reproducible K3s-based streaming stack using bundled Traefik, AIOStream
 
 This repository documents and incrementally implements a focused streaming stack on a Debian 13 VM running under Proxmox VE. It is intended to be understandable, reproducible, self-healing within a single node, and low-maintenance without unnecessary control planes.
 
-The current milestone implements the Remux client layer on the existing K3s
-platform and integrates it with the already validated AIOStreams workload.
-The workload contract is source-verified; live cluster validation remains an
-operator-side gate when cluster access is available, and this checkout never
-treats unavailable live evidence as a PASS.
+The current milestone implements selective Authelia for human/admin surfaces
+on the existing K3s platform, while preserving the validated AIOStreams and
+Remux machine-protocol paths. The workload contract is source-verified; live
+cluster validation remains an operator-side gate when cluster access is
+available, and this checkout never treats unavailable live evidence as a PASS.
 
 ## 2. Scope
 
@@ -22,6 +22,9 @@ In scope:
 - AIOStreams with SQLite, persistent `/app/data`, native authentication, and public HTTPS ingress with an operator-selected public port.
 - Remux with SQLite, persistent `/data`, Jellyfin-compatible HTTP endpoints,
   and internal AIOStreams integration.
+- Authelia with SQLite, persistent state, file-based users, TOTP-capable
+  human authentication, AIOStreams native OIDC federation, and a narrow Remux
+  `/admin` ForwardAuth route.
 - Cloudflare-managed DNS.
 - cert-manager with ACME DNS-01 and a narrowly scoped Cloudflare API token.
 - Renovate awareness for Kubernetes and platform image references under `k8s/`.
@@ -31,7 +34,7 @@ Explicitly out of scope for v0.1:
 - A multi-node cluster or high availability.
 - Docker, Podman, Longhorn, Ceph, NFS, Redis, or PostgreSQL.
 - Argo CD, Flux, Prometheus, Grafana, or unnecessary dashboards/control planes.
-- Authelia, Keel, external-dns, and any automatic application updater in this milestone.
+- Keel, external-dns, and any automatic application updater in this milestone.
 - Committing real domains, addresses, credentials, kubeconfig files, or private keys.
 
 ## 3. Architecture
@@ -49,8 +52,11 @@ flowchart TD
     Client[Client: Infuse, Swiftfin, browser, or Stremio] --> DNS[Cloudflare DNS<br/>hostname only]
     DNS --> Edge[Operator edge<br/>WAN 443 or 8443 -> NAT]
     Edge --> Traefik[Bundled Traefik v3<br/>K3s ServiceLB :443]
-    Traefik --> AIO[AIOStreams]
-    Traefik --> Remux[Remux]
+    Traefik --> AIO[AIOStreams human UI / machine URLs]
+    Traefik --> Remux[Remux native API / playback]
+    Traefik --> Auth[Authelia]
+    Auth -->|native OIDC| AIO
+    Auth -->|ForwardAuth /admin only| Admin[Remux admin page]
     Remux --> AIO
     Remux -->|HTTP redirect where supported| CDN[Upstream or debrid CDN]
     Client -.->|Direct playback after redirect| CDN
@@ -111,6 +117,17 @@ treated as early-stage software: image updates require review, and rollback
 must remain possible. Cluster deployment and runtime evidence are recorded
 only after the operator-side checks run.
 
+### Authelia
+
+[Authelia](https://www.authelia.com/) is the selective human-authentication
+layer. It uses one SQLite-backed replica with file users and TOTP-capable
+two-factor authentication. AIOStreams uses Authelia through its native OIDC
+client while retaining local login for recovery. Remux attaches Authelia
+ForwardAuth only to the separate `/admin` route; Jellyfin-compatible APIs,
+playback, health, bootstrap, and WebSocket paths remain Remux-native.
+See [`k8s/authelia/README.md`](k8s/authelia/README.md) and
+[ADR-0007](docs/decisions/0007-selective-authentication.md).
+
 ## 7. Cloudflare and TLS
 
 Cloudflare is the DNS authority. The validated cert-manager platform obtains
@@ -137,8 +154,11 @@ port, and certificate lifecycle.
 - Credentials are scoped to the smallest zone and permission set needed.
 - Ingress is explicit; an application is not exposed merely because its Service exists.
 - Storage is persistent but local to the VM. A single-node local-path volume is not a backup.
-- AIOStreams native authentication protects human/configuration surfaces while
-  public Stremio machine paths remain usable. No blanket ForwardAuth is used.
+- AIOStreams native OIDC federates the human/configuration flow to Authelia
+  while public Stremio machine paths remain usable. No blanket ForwardAuth is
+  used.
+- Remux's `/admin` route is selectively protected by Authelia; Jellyfin-native
+  protocol paths remain outside that middleware boundary.
 - Changes are reproducible and observable. Future workload automation must
   include health and recovery gates; platform changes remain reviewed.
 
@@ -163,19 +183,23 @@ review-oriented platform/dependency awareness, with automerge disabled. See
 ## 10. Roadmap
 
 See the living roadmap in [`docs/plan.md`](docs/plan.md). Phases 0–3 are
-validated; Phase 4 is the current Remux deployment; selective Authelia,
-bounded application updates, optional DNS automation, and operational polish
-remain sequenced future phases.
+validated; Phase 4 is implemented and live-validated; selective Authelia is
+the current implementation milestone, with its live gate still pending.
+Bounded application updates, optional DNS automation, and operational polish
+remain future phases.
 
 ## 11. Current project status
 
 The repository contains a validated Proxmox/Debian bootstrap, pinned
 single-node K3s platform baseline, cert-manager/Cloudflare DNS-01 TLS
-foundation, and the AIOStreams and Remux workload contracts. AIOStreams'
-historical redacted external validation is recorded in
+foundation, and the AIOStreams, Remux, and Authelia workload contracts.
+AIOStreams' historical redacted external validation is recorded in
 [`docs/validation/aiostreams-2026-08-27.md`](docs/validation/aiostreams-2026-08-27.md).
-Remux live evidence is intentionally recorded only after the cluster-side
-checks are actually run. Authelia, Keel, and external-dns are not deployed.
+Remux live evidence is recorded in
+[`docs/validation/remux-2026-08-28.md`](docs/validation/remux-2026-08-28.md).
+Authelia is source- and render-validated in this checkout but is not deployed
+or live-validated here because an authorized Kubernetes access path is
+unavailable. Keel and external-dns are not deployed.
 
 ## 12. Upstream and reference projects
 

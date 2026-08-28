@@ -118,9 +118,12 @@ transcoding remains proxied.
 - Browser/admin: `/admin`, `/web`, and `/jellyfin` serve the bundled web
   clients; admin API handlers require the Remux admin session.
 
-There is deliberately no blanket Traefik ForwardAuth. Selective Authelia for
-human/admin paths is a later milestone; Jellyfin bootstrap, API, streaming,
-and websocket behavior stays under Remux-native authentication.
+The main Ingress remains free of ForwardAuth. The separate `remux-admin`
+Ingress matches only `/admin` and references the `streaming` namespace
+Authelia middleware. Jellyfin bootstrap, API, streaming, and websocket
+behavior stays under Remux-native authentication. If a future Remux version
+does not preserve `/admin` as a stable human/admin boundary, remove the
+separate Ingress middleware rather than protecting the whole hostname.
 
 ## Persistence and recovery boundary
 
