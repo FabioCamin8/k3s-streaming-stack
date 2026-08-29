@@ -197,9 +197,11 @@ AIOStreams' historical redacted external validation is recorded in
 [`docs/validation/aiostreams-2026-08-27.md`](docs/validation/aiostreams-2026-08-27.md).
 Remux live evidence is recorded in
 [`docs/validation/remux-2026-08-28.md`](docs/validation/remux-2026-08-28.md).
-Authelia is source- and render-validated in this checkout but is not deployed
-or live-validated here because an authorized Kubernetes access path is
-unavailable. Keel and external-dns are not deployed.
+Authelia was deployed and partially live-validated through the authorized
+Kubernetes path, but its selective milestone remains failed pending complete
+MFA/OIDC/machine-protocol evidence and credential rotation. The current record
+is [`docs/validation/authelia-2026-08-29.md`](docs/validation/authelia-2026-08-29.md).
+Keel and external-dns are not deployed.
 
 ## 12. Upstream and reference projects
 

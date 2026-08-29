@@ -67,10 +67,10 @@ without blanket-protecting Stremio, Jellyfin, or other machine protocol
 endpoints. AIOStreams uses native OIDC to the pinned Authelia provider; Remux
 uses ForwardAuth only on the separate `/admin` route and retains
 application-native protocol authentication. Source, renderer, YAML, and pinned
-Authelia configuration checks pass. Cluster deployment, browser, MFA, OIDC,
-machine-path, Pod recreation, and certificate checks remain pending until an
-authorized K3s access path is available. See
-[`docs/validation/authelia-2026-08-28.md`](validation/authelia-2026-08-28.md).
+Authelia configuration checks pass. The authorized cluster path was recovered
+and deployment/basic route checks passed, but browser MFA, OIDC callback,
+complete machine-path, persistence, and security gates remain incomplete. See
+[`docs/validation/authelia-2026-08-29.md`](validation/authelia-2026-08-29.md).
 
 ### Phase 6 - automatic application lifecycle — planned
 

@@ -58,6 +58,9 @@ spec:
             capabilities:
               drop:
                 - ALL
+              add:
+                - SETGID
+                - SETUID
           volumeMounts:
             - name: data
               mountPath: /config
