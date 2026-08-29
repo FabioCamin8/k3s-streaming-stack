@@ -52,6 +52,8 @@ AIOSTREAMS_PUBLIC_HTTPS_PORT=$(read_config AIOSTREAMS_PUBLIC_HTTPS_PORT)
 AIOSTREAMS_SECRET_KEY=$(read_config AIOSTREAMS_SECRET_KEY)
 AIOSTREAMS_AUTH=$(read_config AIOSTREAMS_AUTH)
 AIOSTREAMS_TRUSTED_IPS=$(read_config AIOSTREAMS_TRUSTED_IPS)
+AIOSTREAMS_OIDC_ISSUER=$(read_config AIOSTREAMS_OIDC_ISSUER)
+AIOSTREAMS_OIDC_CLIENT_SECRET=$(read_config AIOSTREAMS_OIDC_CLIENT_SECRET)
 
 hostname_re='^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$'
 [[ $AIOSTREAMS_HOST =~ $hostname_re ]] ||
@@ -72,9 +74,16 @@ done
     die 'AIOSTREAMS_AUTH must be comma-separated username:password pairs'
 [[ $AIOSTREAMS_TRUSTED_IPS =~ ^[0-9./,]+$ ]] ||
     die 'AIOSTREAMS_TRUSTED_IPS must contain only IPv4 addresses or CIDRs'
+oidc_issuer_re='^https://[A-Za-z0-9.-]+/$'
+[[ $AIOSTREAMS_OIDC_ISSUER =~ $oidc_issuer_re ]] ||
+    die 'AIOSTREAMS_OIDC_ISSUER must be an HTTPS issuer URL ending in /'
+[[ -n $AIOSTREAMS_OIDC_CLIENT_SECRET && $AIOSTREAMS_OIDC_CLIENT_SECRET != *$'\n'* &&
+    $AIOSTREAMS_OIDC_CLIENT_SECRET != *$'\r'* ]] ||
+    die 'AIOSTREAMS_OIDC_CLIENT_SECRET must be a non-empty single-line value'
 [[ $AIOSTREAMS_HOST != *'__'* && $AIOSTREAMS_SECRET_KEY != *'__'* &&
     $AIOSTREAMS_PUBLIC_HTTPS_PORT != *'__'* &&
-    $AIOSTREAMS_AUTH != *'__'* && $AIOSTREAMS_TRUSTED_IPS != *'__'* ]] ||
+    $AIOSTREAMS_AUTH != *'__'* && $AIOSTREAMS_TRUSTED_IPS != *'__'* &&
+    $AIOSTREAMS_OIDC_ISSUER != *'__'* && $AIOSTREAMS_OIDC_CLIENT_SECRET != *'__'* ]] ||
     die 'operator config still contains a placeholder'
 
 command -v awk >/dev/null 2>&1 || die 'required command is missing: awk'
@@ -96,7 +105,9 @@ export _AIOSTREAMS_BASE_URL_B64=$(base64_value "$AIOSTREAMS_BASE_URL")
 export _AIOSTREAMS_SECRET_KEY_B64=$(base64_value "$AIOSTREAMS_SECRET_KEY")
 export _AIOSTREAMS_AUTH_B64=$(base64_value "$AIOSTREAMS_AUTH")
 export _AIOSTREAMS_TRUSTED_IPS_B64=$(base64_value "$AIOSTREAMS_TRUSTED_IPS")
+export _AIOSTREAMS_OIDC_CLIENT_SECRET_B64=$(base64_value "$AIOSTREAMS_OIDC_CLIENT_SECRET")
 export _AIOSTREAMS_HOST=$AIOSTREAMS_HOST
+export _AIOSTREAMS_OIDC_ISSUER=$AIOSTREAMS_OIDC_ISSUER
 
 awk '
   {
@@ -104,6 +115,8 @@ awk '
     gsub(/__AIOSTREAMS_SECRET_KEY_B64__/, ENVIRON["_AIOSTREAMS_SECRET_KEY_B64"])
     gsub(/__AIOSTREAMS_AUTH_B64__/, ENVIRON["_AIOSTREAMS_AUTH_B64"])
     gsub(/__AIOSTREAMS_TRUSTED_IPS_B64__/, ENVIRON["_AIOSTREAMS_TRUSTED_IPS_B64"])
+    gsub(/__AIOSTREAMS_OIDC_CLIENT_SECRET_B64__/, ENVIRON["_AIOSTREAMS_OIDC_CLIENT_SECRET_B64"])
+    gsub(/__AIOSTREAMS_OIDC_ISSUER__/, ENVIRON["_AIOSTREAMS_OIDC_ISSUER"])
     print
   }
 ' "$OUTPUT_DIR/bootstrap.yaml" > "$OUTPUT_DIR/bootstrap.yaml.tmp"

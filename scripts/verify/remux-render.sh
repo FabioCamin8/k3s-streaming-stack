@@ -32,6 +32,15 @@ else
     fail 'rendered Ingress substitution is invalid'
 fi
 
+if grep -F 'streaming-authelia-forwardauth@kubernetescrd' \
+    "$TMP_DIR/rendered/admin-ingress.yaml" >/dev/null 2>&1 &&
+    grep -F 'remux.example.com' "$TMP_DIR/rendered/admin-ingress.yaml" >/dev/null 2>&1 &&
+    ! grep -F '__REMUX_HOST__' "$TMP_DIR/rendered/admin-ingress.yaml" >/dev/null 2>&1; then
+    pass 'admin Ingress is separately rendered with the Authelia middleware'
+else
+    fail 'admin Ingress rendering or middleware reference is invalid'
+fi
+
 invalid="$TMP_DIR/invalid.env"
 cat > "$invalid" <<'EOF'
 REMUX_HOST=__REMUX_HOST__

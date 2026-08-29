@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: streaming
+generatorOptions:
+  disableNameSuffixHash: true
+configMapGenerator:
+  - name: authelia-config
+    files:
+      - configuration.yml
+secretGenerator:
+  - name: authelia-users
+    files:
+      - users_database.yml
+  - name: authelia-secrets
+    files:
+      - SESSION_SECRET
+      - STORAGE_ENCRYPTION_KEY
+      - IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET
+      - OIDC_HMAC_SECRET
+      - OIDC_ISSUER_PRIVATE_KEY
+      - AIOSTREAMS_OIDC_CLIENT_SECRET_HASH
+resources:
+  - pvc.yaml
+  - service.yaml
+  - deployment.yaml
+  - ingress.yaml
+  - middleware.yaml

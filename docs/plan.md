@@ -49,7 +49,7 @@ MediaFlow and choose deliberately between TLS termination, SNI passthrough, a
 K3s Traefik consolidation point, or a minimal existing external edge. Do not
 introduce a new reverse-proxy product in the AIOStreams milestone.
 
-### Phase 4 - Remux — THIS PR
+### Phase 4 - Remux — COMPLETE / implemented and live-validated
 
 Stable versioned Remux deployment with Jellyfin-compatible client endpoint,
 `/data` persistence, internal AIOStreams integration, per-addon proxy versus
@@ -57,15 +57,20 @@ HTTP 302 redirect handling, local/LAN Traefik/TLS validation, and the explicit
 invariant that no redirect may expose `*.svc.cluster.local` or any other
 client-unreachable internal AIOStreams URL. Infuse/Swiftfin status is reported
 only when those clients are actually available and tested. Cluster-side
-runtime evidence remains pending until an authorized K3s access path is
-available.
+runtime evidence is recorded in
+[`docs/validation/remux-2026-08-28.md`](validation/remux-2026-08-28.md).
 
-### Phase 5 - selective Authelia — NEXT
+### Phase 5 - selective Authelia — THIS PR / live gate pending
 
-Protect human/admin/configuration surfaces without blanket-protecting Stremio,
-Jellyfin, or other machine protocol endpoints. Prefer AIOStreams native OIDC
-where upstream supports it; evaluate Remux admin paths separately and retain
-application-native protocol authentication.
+Implement and validate protection for human/admin/configuration surfaces
+without blanket-protecting Stremio, Jellyfin, or other machine protocol
+endpoints. AIOStreams uses native OIDC to the pinned Authelia provider; Remux
+uses ForwardAuth only on the separate `/admin` route and retains
+application-native protocol authentication. Source, renderer, YAML, and pinned
+Authelia configuration checks pass. The authorized cluster path was recovered
+and deployment/basic route checks passed, but browser MFA, OIDC callback,
+complete machine-path, persistence, and security gates remain incomplete. See
+[`docs/validation/authelia-2026-08-29.md`](validation/authelia-2026-08-29.md).
 
 ### Phase 6 - automatic application lifecycle — planned
 

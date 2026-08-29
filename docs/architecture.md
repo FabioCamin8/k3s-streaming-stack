@@ -6,9 +6,9 @@ The deployment target is one Debian 13 VM on Proxmox VE. The reproducible
 Cloud-Init template, full-clone Debian baseline, pinned K3s node, and
 cert-manager DNS-01/TLS platform have been executed and validated. K3s
 supplies its bundled containerd, CoreDNS, Traefik v3, ServiceLB, local-path
-provisioner, and metrics-server. AIOStreams is the direct Stremio backend and
-Remux is the Jellyfin-compatible client layer; both are one-replica workloads
-with local persistent data.
+provisioner, and metrics-server. Authelia, AIOStreams, and Remux are
+one-replica workloads with local persistent data; AIOStreams is the direct
+Stremio backend and Remux is the Jellyfin-compatible client layer.
 
 There is no Docker or Podman dependency. There is no second ingress controller. There is no claim of high availability: loss of the VM takes the cluster and its local data offline.
 
@@ -49,12 +49,14 @@ Multi-node overlay transport remains unvalidated.
 2. If the origin is reachable, DNS-only traffic goes directly to the operator-selected public port. A router/NAT rule maps that port to Traefik's internal HTTPS port 443; if HTTP proxying is deliberately enabled, traffic first enters through Cloudflare's edge, according to the choice recorded in [`docs/cloudflare.md`](cloudflare.md).
 3. Traefik receives HTTP(S) traffic through the reachable K3s networking path and routes by hostname to the selected Kubernetes Service.
 4. Traefik routes the public AIOStreams HTTPS host to its ClusterIP Service.
-5. Remux receives Jellyfin-compatible client requests and calls AIOStreams over
+5. Traefik routes the Authelia HTTPS host to its ClusterIP Service. A separate
+   Remux `/admin` route uses only the Authelia ForwardAuth middleware.
+6. Remux receives Jellyfin-compatible client requests and calls AIOStreams over
    the `aiostreams.streaming.svc.cluster.local` Service, not through the public
    router/NAT path.
-6. AIOStreams handles stream aggregation and keeps its application data and
+7. AIOStreams handles stream aggregation and keeps its application data and
    default disk caches under persistent `/app/data`.
-7. Remux proxies internal AIOStreams HTTP sources. A per-addon HTTP redirect is
+8. Remux proxies internal AIOStreams HTTP sources. A per-addon HTTP redirect is
    available for externally reachable direct-play sources, but it is disabled
    for AIOStreams so a `*.svc.cluster.local` URL cannot reach a client.
 
@@ -88,7 +90,8 @@ The Kubernetes layout is intentionally small:
 
 - `k8s/infrastructure/`: cluster-level configuration that is proven necessary, such as supported Traefik and certificate integration.
 - `k8s/aiostreams/`: the implemented AIOStreams Deployment, Service, local-path PVC, private-rendered Secret, and Traefik Ingress.
-- `k8s/remux/`: the Remux Deployment, Service, local-path PVC, private-rendered Ingress, and internal AIOStreams addon helper.
+- `k8s/remux/`: the Remux Deployment, Service, local-path PVC, native ingress, selective `/admin` Ingress, and internal AIOStreams addon helper.
+- `k8s/authelia/`: the Authelia Deployment, Service, local-path PVC, private-rendered configuration/Secrets, Traefik Ingress, and reusable ForwardAuth middleware.
 
 Every workload file belongs here only after its image, port, probe, storage,
 security, and configuration assumptions have a primary-source basis.
@@ -97,12 +100,15 @@ security, and configuration assumptions have a primary-source basis.
 
 - The VM is the infrastructure boundary; Proxmox and the guest are separate administration domains.
 - Traefik is the intended sole ingress boundary; external reachability still depends on DNS, firewall, NAT, and routing outside Kubernetes and is not implied by an Ingress object.
-- AIOStreams native authentication protects human/admin/configuration surfaces;
-  public Stremio machine paths are not blanket-protected by an external
-  ForwardAuth. Future Authelia integration must remain selective.
-- Remux uses its Jellyfin-compatible native authentication and public bootstrap
-  routes. No blanket ForwardAuth is placed before its protocol, streaming, or
-  WebSocket paths; human/admin protection is a future selective-Authelia task.
+- AIOStreams uses native OIDC federation to Authelia for human/admin/configuration
+  access, while its native login remains available as recovery. Public Stremio
+  machine paths are not protected by an external ForwardAuth.
+- Remux uses its Jellyfin-compatible native authentication for the main
+  hostname. Only the independently routed `/admin` surface uses Authelia
+  ForwardAuth; protocol, streaming, and WebSocket paths do not.
+- Authelia's file backend uses password plus TOTP for the selected human/admin
+  policy. Its SQLite database, file users, session/storage/OIDC secrets,
+  signing key, and MFA registrations are sensitive state.
 - AIOStreams accepts forwarded client IP information only when the direct
   Traefik source is in the exact private `TRUSTED_IPS` range observed for this
   K3s topology. The operator value is not committed here.
@@ -133,6 +139,31 @@ the Traefik TLS host. Remux supplies the catalog and playback API, while
 AIOStreams remains independently available for configuration/admin and direct
 Stremio fallback. The client path must never receive an internal Service DNS
 name in a redirect `Location` header.
+
+## Selective authentication trust model
+
+```text
+                       HTTPS / Traefik
+                              |
+              +---------------+----------------+
+              |                                |
+       AIO human UI                       Remux /admin
+              |                                |
+       native OIDC client              ForwardAuth middleware
+              |                                |
+           Authelia                    Authelia two-factor
+              |
+          password + TOTP
+
+   AIO Stremio machine URLs       Remux Jellyfin API/playback/WebSocket
+   native application behavior    native Jellyfin-compatible auth
+```
+
+This is an explicit architecture boundary, not an accidental list of ACL
+exceptions. Authelia is not placed in front of the AIOStreams hostname or the
+Remux main hostname. AIOStreams native OIDC is the preferred federation path;
+Remux remains native-authenticated for Infuse, Swiftfin, Jellyfin APIs, and
+playback. The compatibility of those machine protocols is a hard invariant.
 
 ## Future edge consolidation
 

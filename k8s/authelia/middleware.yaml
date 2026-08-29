@@ -1,0 +1,9 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: authelia-forwardauth
+spec:
+  forwardAuth:
+    address: http://authelia.streaming.svc.cluster.local/api/authz/forward-auth
+    trustForwardHeader: false
+    maxResponseBodySize: 8192

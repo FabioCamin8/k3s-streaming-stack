@@ -3,9 +3,9 @@
 This is the intended sequence for a fresh deployment. The Proxmox/Debian
 template, `k3s01` full-clone lifecycle, pinned K3s platform, and cert-manager
 DNS-01/TLS foundation have been executed and validated with the repository
-automation. AIOStreams is the completed application milestone and Remux is the
-current application phase; the later security/update controllers remain
-separate phases in [`plan.md`](plan.md).
+automation. AIOStreams and Remux are completed application milestones;
+selective Authelia is the current application/security phase. Automatic update
+controllers remain a separate future phase in [`plan.md`](plan.md).
 
 ## Prerequisites
 
@@ -85,6 +85,29 @@ separate phases in [`plan.md`](plan.md).
    `REMUX_API_TOKEN_FILE`. Validate Remux locally/LAN-side through Traefik,
    then record protocol, integration, stream, redirect, persistence, and
    resource evidence only for checks actually executed.
+
+## Selective Authelia phase — current
+
+1. Verify the current Authelia contract in
+   [`k8s/authelia/README.md`](../k8s/authelia/README.md) and obtain its users
+   file, password hashes, session/storage/OIDC secrets, signing key, and
+   AIOStreams OIDC client material through protected operator files. Never
+   place those values in the checkout or command history.
+2. Render the Authelia, AIOStreams, and Remux bundles into a protected
+   temporary directory. Apply the Authelia bundle first, then the updated
+   AIOStreams and Remux bundles, while preserving the existing native recovery
+   login and machine endpoints.
+3. Validate Authelia health, TLS, login, invalid-login rejection, TOTP,
+   recovery, and persistent state. Validate AIOStreams OIDC only for its human
+   configuration flow; its Stremio machine URLs remain independently tested.
+4. Validate Remux `/admin` through ForwardAuth, then separately rerun Jellyfin
+   bootstrap/login/API, playback, WebSocket, and internal AIOStreams checks
+   without an Authelia browser session. Remove the `/admin` middleware if the
+   deployed Remux route boundary is not stable.
+5. Keep WAN forwarding disabled. Record the exact image digests and each
+   browser, machine-protocol, Pod-recreation, and certificate result in the
+   redacted validation record. Back up Authelia's local-path state separately
+   from the K3s datastore before any future upgrade.
 
 ## Application stop conditions
 

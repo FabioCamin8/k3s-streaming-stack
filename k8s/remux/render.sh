@@ -53,13 +53,15 @@ hostname_re='^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0
 [[ $REMUX_HOST != *'__'* ]] || die 'operator config still contains a placeholder'
 
 mkdir -m 700 "$OUTPUT_DIR"
-for resource in pvc.yaml service.yaml deployment.yaml ingress.yaml kustomization.yaml; do
+for resource in pvc.yaml service.yaml deployment.yaml ingress.yaml admin-ingress.yaml kustomization.yaml; do
     cp "$SCRIPT_DIR/$resource" "$OUTPUT_DIR/$resource"
 done
 
 export _REMUX_HOST=$REMUX_HOST
-awk '{ gsub(/__REMUX_HOST__/, ENVIRON["_REMUX_HOST"]); print }' \
-    "$OUTPUT_DIR/ingress.yaml" > "$OUTPUT_DIR/ingress.yaml.tmp"
-mv -- "$OUTPUT_DIR/ingress.yaml.tmp" "$OUTPUT_DIR/ingress.yaml"
+for ingress in ingress.yaml admin-ingress.yaml; do
+    awk '{ gsub(/__REMUX_HOST__/, ENVIRON["_REMUX_HOST"]); print }' \
+        "$OUTPUT_DIR/$ingress" > "$OUTPUT_DIR/$ingress.tmp"
+    mv -- "$OUTPUT_DIR/$ingress.tmp" "$OUTPUT_DIR/$ingress"
+done
 
 printf 'PASS: rendered Remux bundle (operator values withheld)\n'

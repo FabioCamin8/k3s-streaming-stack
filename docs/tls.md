@@ -1,9 +1,10 @@
 # TLS baseline
 
 This milestone establishes the smallest reproducible TLS foundation for the
-single-node K3s platform. AIOStreams and Remux consume that foundation through
-the production Traefik entrypoint, each with its own host-specific Ingress.
-Authelia, external-dns, and a Traefik dashboard remain outside scope.
+single-node K3s platform. AIOStreams, Remux, and Authelia consume that
+foundation through the production Traefik entrypoint, each with its own
+host-specific Ingress. External-dns and a Traefik dashboard remain outside
+scope.
 
 ## Decisions
 
@@ -25,6 +26,19 @@ Authelia, external-dns, and a Traefik dashboard remain outside scope.
   Cloudflare DNS-01 validates the hostname through a TXT record, while the
   router may expose WAN 443 or WAN 8443 to Traefik's unchanged internal 443.
   Do not add HTTP-01 or require WAN port 80 for the 8443 mode.
+
+## Application host boundary
+
+The selective-authentication milestone adds a dedicated Authelia host and a
+Remux `/admin` route. The operator must issue host-specific certificates for
+the AIOStreams, Remux, and Authelia hostnames from the same validated
+DNS-01/Traefik foundation; the exact hostnames and certificate Secrets remain
+operator inputs outside Git. The AIOStreams OIDC issuer and callback must use
+the Authelia and AIOStreams HTTPS hostnames through Traefik, not Service DNS
+names or direct Pod access.
+
+The Remux `/admin` route uses the existing Remux host certificate. It is a
+separate Ingress route, not a new public port or a second TLS entrypoint.
 
 ## Operator sequence
 
@@ -90,6 +104,13 @@ issuance before relying on renewal.
 
 No token, private key, generated certificate, or real deployment hostname is
 checked in by this baseline.
+
+## Authelia TLS boundary
+
+Authelia uses a dedicated Traefik Ingress and certificate Secret. Validate its
+health endpoint, portal, and OIDC discovery over the real HTTPS/SNI path. The
+operator's current WAN streaming forward remains intentionally disabled; its
+absence does not block local/LAN certificate or authentication validation.
 
 ## Remux TLS boundary
 
